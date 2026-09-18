@@ -1,0 +1,4 @@
+# Built plugin; the editor loads it from DEKI_BUILDER_PATH or ~/.deki-editor/builders/
+*.dll
+*.so
+*.dylib
