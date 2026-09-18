@@ -1,0 +1,33 @@
+{
+  "id": "deki-tactility-integration",
+  "displayName": "Tactility Integration",
+  "minEngine": "0.16.0",
+  "buildDefine": "DEKI_PACKAGE_TACTILITY",
+  "platforms": [
+    "tactility"
+  ],
+  "platformRequires": [
+    "tactility"
+  ],
+  "requires": [
+    "deki-input"
+  ],
+  "features": [
+    {
+      "id": "display",
+      "displayName": "Display",
+      "defaultEnabled": true,
+      "componentTypes": [
+        "TactilityDisplaySetup"
+      ]
+    },
+    {
+      "id": "input",
+      "displayName": "Input",
+      "defaultEnabled": true,
+      "componentTypes": [
+        "TactilityInputSetup"
+      ]
+    }
+  ]
+}
