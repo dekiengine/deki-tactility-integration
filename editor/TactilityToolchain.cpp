@@ -334,10 +334,35 @@ std::string TactilitySdk::EnsureSimulator(int width, int height,
     const std::string probe =
         "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:6666/info', timeout=1)\"";
     auto quiet = [](const std::string&) {};
+    const std::string resolution = std::to_string(width) + "x" + std::to_string(height);
+
+    // The simulator this backend started last, as "<pid> <width>x<height>".
+    // One it started at another size is restarted at this one; a simulator
+    // started any other way is used as it is, since it is not ours to stop.
+    const fs::path started = fs::path(Root()) / "simulator.started";
     if (RunShellCommand(probe + " 2>/dev/null", Root(), quiet, cancel) == 0)
     {
-        onLine("Using the Tactility simulator already running on this machine");
-        return {};
+        std::ifstream in(started);
+        long pid = 0;
+        std::string size;
+        in >> pid >> size;
+        const bool ours = pid > 0 && RunShellCommand("kill -0 " + std::to_string(pid) + " 2>/dev/null", Root(),
+                                                     quiet, cancel) == 0;
+        if (!ours || size == resolution)
+        {
+            onLine(ours ? "Using the Tactility simulator already running at " + resolution
+                        : "Using the Tactility simulator already running on this machine");
+            return {};
+        }
+        onLine("Restarting the Tactility simulator: it runs at " + size + ", the platform is " + resolution);
+        // It ignores SIGTERM.
+        RunShellCommand("kill -9 " + std::to_string(pid), Root(), quiet, cancel);
+        for (int attempt = 0; attempt < 20; ++attempt)
+        {
+            if (RunShellCommand("kill -0 " + std::to_string(pid) + " 2>/dev/null", Root(), quiet, cancel) != 0)
+                break;
+            RunShellCommand("sleep 0.25", Root(), quiet, cancel);
+        }
     }
 
     const fs::path src = SourceDir();
@@ -358,12 +383,13 @@ std::string TactilitySdk::EnsureSimulator(int width, int height,
 
     // Detached from the editor (its own session, output to a log beside the
     // SDK) so it outlives this deploy, like any simulator the user starts.
+    // $! is the simulator itself: setsid, not being a group leader here,
+    // execs rather than forks, and so does nohup.
     const fs::path log = fs::path(Root()) / "simulator.log";
-    const std::string resolution = std::to_string(width) + "x" + std::to_string(height);
     onLine("Starting the Tactility simulator at " + resolution + " (log: " + log.string() + ")");
     const std::string start = "cd \"" + data.string() + "\" && TACTILITY_SIMULATOR_RESOLUTION=" + resolution +
                               " setsid nohup \"" + binary.string() + "\" > \"" + log.string() +
-                              "\" 2>&1 < /dev/null &";
+                              "\" 2>&1 < /dev/null & echo \"$! " + resolution + "\" > \"" + started.string() + "\"";
     if (RunShellCommand(start, data.string(), onLine, cancel) != 0)
         return "could not start the simulator";
 

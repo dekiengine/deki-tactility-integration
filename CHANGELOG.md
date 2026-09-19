@@ -75,8 +75,9 @@ firmware.
   so one built before the patch shows as not installed.
 - Deploying to `localhost` starts the simulator at the platform's screen size,
   with its development service on, when none is running (log:
-  `<toolchains>/tactility/<commit>/simulator.log`); one already running is
-  used as it is.
+  `<toolchains>/tactility/<commit>/simulator.log`). One it started at another
+  size is restarted at the platform's (it records what it started in
+  `simulator.started`); one started any other way is used as it is.
 - The key ids live in one header (`TactilityKeys.h`) for both input paths.
 
 Verified in the simulator: deki-demo builds, installs, runs, relaunches and
