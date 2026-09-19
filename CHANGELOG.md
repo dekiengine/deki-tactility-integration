@@ -73,6 +73,9 @@ firmware.
   sources: the size comes from `TACTILITY_SIMULATOR_RESOLUTION`. The patch is
   an exact match that refuses unrecognised sources, and the SDK records it,
   so one built before the patch shows as not installed.
+- **Deploy installs, and only installs** ("Install"): the game appears in the
+  OS's Apps menu under the project's name and is opened from there, instead
+  of being started over whatever was on screen.
 - Deploying to `localhost` starts the simulator at the platform's screen size,
   with its development service on, when none is running (log:
   `<toolchains>/tactility/<commit>/simulator.log`). One it started at another

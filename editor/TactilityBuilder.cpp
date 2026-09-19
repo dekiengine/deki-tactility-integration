@@ -247,12 +247,15 @@ class TactilityBuilder : public FirmwareBuilderBase
 
     // ---- deploy: the simulator only, over its development service ----------
     //
-    // A device app is installed the same way (tactility.py install <address>),
-    // but a device build does not exist yet, so a device platform shows no
-    // button rather than one that cannot work.
+    // Installs the app and leaves it there: it appears in the OS's Apps menu
+    // like any other and is opened from it, rather than started over whatever
+    // the user was doing. A device app is installed the same way
+    // (tactility.py install <address>), but a device build does not exist
+    // yet, so a device platform shows no button rather than one that cannot
+    // work.
 
     bool SupportsDeploy() const override { return IsSimulator(); }
-    const char* GetDeployLabel() const override { return "Install and run"; }
+    const char* GetDeployLabel() const override { return "Install"; }
 
     std::vector<DeployTarget> EnumerateDeployTargets() const override
     {
@@ -907,30 +910,27 @@ class TactilityBuilder : public FirmwareBuilderBase
         // The device must be running, with its development service on.
         //
         // tactility.py's exit code does not say whether this worked: a refused
-        // install prints its failure mark and still exits 0, and the device
-        // then answers "run" with 200 for an app it does not have. The mark
+        // install prints its failure mark and still exits 0. The mark
         // (print_status_error's "❌") is the tool's only failure signal here.
-        for (const char* action : { "install", "run" })
-        {
-            bool toolFailed = false;
-            const int code = RunShellCommand(ToolCommand(root, std::string(action) + " --host " + host + " --local-sdk"),
-                                             root.string(),
-                                             [&out, &toolFailed](const std::string& line)
-                                             {
-                                                 if (line.find("\xE2\x9D\x8C") != std::string::npos)
-                                                     toolFailed = true;
-                                                 if (out)
-                                                     out(line, false);
-                                             },
-                                             &m_CancelRequested);
-            if (code != 0 || toolFailed)
-                return Fail(out, progress,
-                            std::string("tactility.py ") + action + " on " + host +
-                                " failed; its output above, and the device's log, say why. A device that "
-                                "cannot be reached is not running, or its development service is off.");
-        }
+        bool toolFailed = false;
+        const int code = RunShellCommand(ToolCommand(root, "install --host " + host + " --local-sdk"), root.string(),
+                                         [&out, &toolFailed](const std::string& line)
+                                         {
+                                             if (line.find("\xE2\x9D\x8C") != std::string::npos)
+                                                 toolFailed = true;
+                                             if (out)
+                                                 out(line, false);
+                                         },
+                                         &m_CancelRequested);
+        if (code != 0 || toolFailed)
+            return Fail(out, progress,
+                        "tactility.py install on " + host +
+                            " failed; its output above, and the device's log, say why. A device that cannot be "
+                            "reached is not running, or its development service is off.");
 
-        SetProgress(BuildState::Completed, "Running on " + host, 1.0f);
+        const std::string name = AppNameFor(projectPath, m_PlatformConfig);
+        Report(out, "Installed '" + name + "' on " + host + "; open it from the Apps menu", false);
+        SetProgress(BuildState::Completed, "Installed on " + host, 1.0f);
         if (progress)
             progress(GetProgress());
     }
