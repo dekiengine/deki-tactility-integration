@@ -19,8 +19,10 @@ namespace DekiTactility
  * game's framebuffer in a canvas inside it: the status bar, the launcher and
  * the rest of the OS stay up around it.
  *
- * The game renders at its own size (the platform's screen size), centred in
- * the window. Each present copies the finished frame into the canvas's buffer
+ * The game renders at its own size (the platform's screen size), placed where
+ * it would be on the bare panel - centred on the screen - with the OS's chrome
+ * drawn over it: a game the size of the screen fills it, and the status bar
+ * hides its top rows. Each present copies the finished frame into the canvas's buffer
  * under the LVGL lock, and LVGL draws it from its own task. That is also what
  * makes it visible in the simulator, whose renderer belongs to LVGL's thread
  * and shows nothing drawn from any other.

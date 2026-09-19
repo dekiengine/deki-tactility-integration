@@ -893,7 +893,18 @@ class TactilityBuilder : public FirmwareBuilderBase
         if (!fs::is_regular_file(root / "build" / (m_PlatformConfig.Option("appId") + ".app"), ec))
             return Fail(out, progress, "Nothing to install: build the app first");
 
-        // The simulator must be running, with its development service on.
+        // A simulator on this machine is started at the platform's screen size
+        // if none is running; one that is running is used as it is.
+        if (IsSimulator() && (host == "localhost" || host == "127.0.0.1"))
+        {
+            const std::string error = TactilitySdk::EnsureSimulator(
+                m_PlatformConfig.screenWidth, m_PlatformConfig.screenHeight,
+                [&out](const std::string& line) { if (out) out(line, false); }, &m_CancelRequested);
+            if (!error.empty())
+                return Fail(out, progress, error);
+        }
+
+        // The device must be running, with its development service on.
         //
         // tactility.py's exit code does not say whether this worked: a refused
         // install prints its failure mark and still exits 0, and the device

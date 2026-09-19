@@ -166,7 +166,22 @@ void TactilityWindowDisplay::BuildWidgets(void* rootObject)
     auto* root = static_cast<lv_obj_t*>(rootObject);
     lv_obj_t* canvas = lv_canvas_create(root);
     lv_canvas_set_buffer(canvas, m_Buffer, m_Width, m_Height, LV_COLOR_FORMAT_RGB565);
-    lv_obj_center(canvas);
+
+    // Where the game would be on the bare panel - centred on the SCREEN, not
+    // in the window - with the OS's chrome drawn over it. A game as big as
+    // the screen then fills it and the status bar hides its top rows, rather
+    // than the game being pushed down and cut off at the bottom. The part
+    // outside the window is clipped, and the window must not scroll to it.
+    lv_obj_remove_flag(root, LV_OBJ_FLAG_SCROLLABLE);
+    lv_display_t* display = lv_obj_get_display(root);
+    const int32_t screenX = (lv_display_get_horizontal_resolution(display) - m_Width) / 2;
+    const int32_t screenY = (lv_display_get_vertical_resolution(display) - m_Height) / 2;
+    lv_obj_update_layout(root);
+    lv_area_t placed;
+    lv_obj_get_coords(canvas, &placed);
+    // set_pos is relative to the root's content box; move by the difference
+    // between where it is and where it should be on screen.
+    lv_obj_set_pos(canvas, screenX - placed.x1, screenY - placed.y1);
 
     // Pointer and keys reach the game through the canvas.
     lv_obj_add_flag(canvas, LV_OBJ_FLAG_CLICKABLE);

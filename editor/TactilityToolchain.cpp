@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 
 namespace fs = std::filesystem;
 
@@ -29,6 +30,59 @@ std::string Native(std::string p)
     std::replace(p.begin(), p.end(), '/', '\\');
 #endif
     return p;
+}
+
+// The simulator's one patch (see TactilityToolchain.h). Recorded in the SDK
+// it builds, so an SDK from before the patch counts as not built.
+constexpr const char* kSimulatorPatchMarker = "deki-simulator-patches.txt";
+constexpr const char* kSimulatorPatchId = "display-resolution-from-env 1";
+
+constexpr const char* kSimulatorSizeLine = "static const SdlDisplayConfig sdl_display_config = { 640, 480 };";
+constexpr const char* kSimulatorSizePatch =
+    "// Patched by Deki (deki-tactility-integration): the display size comes from\n"
+    "// TACTILITY_SIMULATOR_RESOLUTION (\"320x240\"), so the simulator can stand in for\n"
+    "// a device of any size. Unset, it is Tactility's own 640x480.\n"
+    "#include <cstdio>\n"
+    "#include <cstdlib>\n"
+    "static SdlDisplayConfig deki_sdl_display_config() {\n"
+    "    SdlDisplayConfig config = { 640, 480 };\n"
+    "    const char* value = std::getenv(\"TACTILITY_SIMULATOR_RESOLUTION\");\n"
+    "    if (value == nullptr) {\n"
+    "        return config;\n"
+    "    }\n"
+    "    unsigned width = 0, height = 0;\n"
+    "    if (std::sscanf(value, \"%ux%u\", &width, &height) != 2 || width < 64 || height < 64 || width > 4096 || "
+    "height > 4096) {\n"
+    "        std::fprintf(stderr, \"TACTILITY_SIMULATOR_RESOLUTION '%s' is not <width>x<height>; using 640x480\\n\", "
+    "value);\n"
+    "        return config;\n"
+    "    }\n"
+    "    config.horizontal_resolution = static_cast<uint16_t>(width);\n"
+    "    config.vertical_resolution = static_cast<uint16_t>(height);\n"
+    "    return config;\n"
+    "}\n"
+    "static const SdlDisplayConfig sdl_display_config = deki_sdl_display_config();";
+
+std::string PatchSimulator(const fs::path& src)
+{
+    const fs::path file = src / "Devices" / "simulator" / "Source" / "module.cpp";
+    std::string text;
+    {
+        std::ifstream in(file, std::ios::binary);
+        if (!in)
+            return "the simulator source " + file.string() + " is missing";
+        text.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    }
+    if (text.find("deki_sdl_display_config") != std::string::npos)
+        return {};  // already patched: the checkout keeps local changes
+    const size_t at = text.find(kSimulatorSizeLine);
+    if (at == std::string::npos)
+        return "the simulator's display setup is not what the Deki patch expects in " + file.string() +
+               "; the pinned Tactility changed, and the patch needs updating with it";
+    text.replace(at, std::string(kSimulatorSizeLine).size(), kSimulatorSizePatch);
+    std::ofstream out(file, std::ios::binary | std::ios::trunc);
+    out << text;
+    return out ? std::string() : "could not write " + file.string();
 }
 
 std::string ReadFirstLine(const fs::path& file)
@@ -85,7 +139,8 @@ bool TactilitySdk::IsBuilt(const std::string& platform)
     // release-sdk-esp32.py writes idf-version.txt last. A device app also
     // needs the app configuration tactility.py would otherwise download.
     if (IsPosix(platform))
-        return fs::is_regular_file(sdk / "CMakeLists.txt", ec);
+        return fs::is_regular_file(sdk / "CMakeLists.txt", ec) &&
+               ReadFirstLine(sdk / kSimulatorPatchMarker) == kSimulatorPatchId;
     return fs::is_regular_file(sdk / "idf-version.txt", ec) &&
            fs::is_regular_file(tool / "CDN" / ("sdkconfig.app." + platform), ec);
 }
@@ -174,6 +229,10 @@ std::string TactilitySdk::Build(const std::string& platform, const std::string& 
     fs::path targetMarker;
     if (posix)
     {
+        if (auto err = PatchSimulator(src); !err.empty())
+            return err;
+        onLine("Simulator patched: display size from TACTILITY_SIMULATOR_RESOLUTION");
+
         // The simulator: Tactility's root CMakeLists builds it whenever
         // ESP-IDF is not in the environment, into buildsim/, which is where
         // release-sdk-posix.py packages the libraries from. Testing and
@@ -246,12 +305,78 @@ std::string TactilitySdk::Build(const std::string& platform, const std::string& 
         std::ofstream marker(targetMarker, std::ios::trunc);
         marker << platform << "\n";
     }
+    if (posix)
+    {
+        std::ofstream marker(sdk / kSimulatorPatchMarker, std::ios::trunc);
+        marker << kSimulatorPatchId << "\n";
+    }
 
     if (!IsBuilt(platform))
         return "the release script finished but " + Native(sdk.string()) + " is incomplete";
     onLine("TactilitySDK " + std::string(TactilityPin::kVersion) + " for " + platform + " ready at " +
            Native(sdk.string()));
     return {};
+}
+
+std::string TactilitySdk::EnsureSimulator(int width, int height,
+                                          const std::function<void(const std::string&)>& onLine,
+                                          const std::atomic<bool>* cancel)
+{
+#ifdef _WIN32
+    (void)width;
+    (void)height;
+    (void)onLine;
+    (void)cancel;
+    return "the Tactility simulator runs on Linux only";
+#else
+    // tactility.py talks to the development service on port 6666; answering
+    // there is what "running" means. python3 is already required by the tool.
+    const std::string probe =
+        "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:6666/info', timeout=1)\"";
+    auto quiet = [](const std::string&) {};
+    if (RunShellCommand(probe + " 2>/dev/null", Root(), quiet, cancel) == 0)
+    {
+        onLine("Using the Tactility simulator already running on this machine");
+        return {};
+    }
+
+    const fs::path src = SourceDir();
+    const fs::path binary = src / "buildsim" / "Tactility" / "Tactility";
+    const fs::path data = src / "Data";
+    std::error_code ec;
+    if (!fs::is_regular_file(binary, ec))
+        return "the simulator is not built (" + binary.string() + "); install the TactilitySDK component";
+
+    // Its development service, the thing an app is installed through, is off
+    // until a setting turns it on at boot: the one its Development app writes.
+    const fs::path settings = data / "data" / "tactility" / "user" / "app" / "tactility.development";
+    fs::create_directories(settings, ec);
+    {
+        std::ofstream f(settings / "development.properties", std::ios::trunc);
+        f << "enableOnBoot=true\n";
+    }
+
+    // Detached from the editor (its own session, output to a log beside the
+    // SDK) so it outlives this deploy, like any simulator the user starts.
+    const fs::path log = fs::path(Root()) / "simulator.log";
+    const std::string resolution = std::to_string(width) + "x" + std::to_string(height);
+    onLine("Starting the Tactility simulator at " + resolution + " (log: " + log.string() + ")");
+    const std::string start = "cd \"" + data.string() + "\" && TACTILITY_SIMULATOR_RESOLUTION=" + resolution +
+                              " setsid nohup \"" + binary.string() + "\" > \"" + log.string() +
+                              "\" 2>&1 < /dev/null &";
+    if (RunShellCommand(start, data.string(), onLine, cancel) != 0)
+        return "could not start the simulator";
+
+    for (int attempt = 0; attempt < 60; ++attempt)
+    {
+        if (cancel != nullptr && cancel->load())
+            return "cancelled";
+        if (RunShellCommand(probe + " 2>/dev/null", Root(), quiet, cancel) == 0)
+            return {};
+        RunShellCommand("sleep 0.5", Root(), quiet, cancel);
+    }
+    return "the simulator did not start answering on port 6666; see " + log.string();
+#endif
 }
 
 }  // namespace DekiEditor

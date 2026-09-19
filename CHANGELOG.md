@@ -65,6 +65,18 @@ firmware.
   keyboard; LVGL reports a key only as it goes down, so it arrives as a press
   and an immediate release. Uses only functions Tactility exports to apps.
 - The simulator platform runs in window mode at 320x240.
+- In a window the game is placed where it would be on the bare panel,
+  centred on the screen, with the OS's chrome drawn over it: a game the size
+  of the screen fills it and the status bar hides its top rows.
+- **The simulator is 320x240** (or whatever the platform says). Tactility
+  fixes it at 640x480, so the SDK component applies one patch to the pinned
+  sources: the size comes from `TACTILITY_SIMULATOR_RESOLUTION`. The patch is
+  an exact match that refuses unrecognised sources, and the SDK records it,
+  so one built before the patch shows as not installed.
+- Deploying to `localhost` starts the simulator at the platform's screen size,
+  with its development service on, when none is running (log:
+  `<toolchains>/tactility/<commit>/simulator.log`); one already running is
+  used as it is.
 - The key ids live in one header (`TactilityKeys.h`) for both input paths.
 
 Verified in the simulator: deki-demo builds, installs, runs, relaunches and

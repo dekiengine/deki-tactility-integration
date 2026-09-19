@@ -19,6 +19,13 @@
 // needs no ESP-IDF; its SDK is the simulator's own build, and an app for it is
 // a shared object the simulator loads.
 //
+// The simulator is built with ONE patch to the pinned sources: its display
+// size, fixed at 640x480 upstream, comes from TACTILITY_SIMULATOR_RESOLUTION
+// ("320x240"), so it can stand in for the device a platform describes. The
+// deploy step starts it at the platform's screen size. Everything else is
+// Tactility's code as pinned; the patch is exact-match and refuses to apply
+// to sources it does not recognise.
+//
 // The app build tool comes from a second pinned checkout, TactilityTool: its
 // tactility.py, and its CDN/sdkconfig.app.<chip> files - the app configuration
 // tactility.py otherwise downloads from Tactility's CDN on first use. Placing
@@ -79,6 +86,13 @@ public:
     static std::string Build(const std::string& platform, const std::string& idfPath,
                              const std::function<void(const std::string&)>& onLine,
                              const std::atomic<bool>* cancel);
+
+    /// Make sure a simulator is answering on this machine: use the one that
+    /// is, or start the built one at `width`x`height` with its development
+    /// service on, and wait for it. Returns an empty string on success.
+    static std::string EnsureSimulator(int width, int height,
+                                       const std::function<void(const std::string&)>& onLine,
+                                       const std::atomic<bool>* cancel);
 };
 
 }  // namespace DekiEditor
