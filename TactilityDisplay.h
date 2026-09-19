@@ -101,6 +101,9 @@ class TactilityDisplay : public Deki::IDisplay
     /// DMA-capable staging band, allocated at Initialize().
     uint8_t* m_Band = nullptr;
     size_t m_BandBytes = 0;
+
+    /// Draws the panel has refused, for the log.
+    uint32_t m_DrawFailures = 0;
 };
 
 }  // namespace DekiTactility

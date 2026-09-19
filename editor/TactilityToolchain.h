@@ -7,12 +7,17 @@
 //                  pinned component, at the SAME install path, as
 //                  deki-esp32-integration declares, so a machine that builds
 //                  for both has one copy. The two pins must move together.
-//   tactility-sdk  The TactilitySDK for the platform's chip. Tactility 0.8 has no
+//   tactility-sdk  The TactilitySDK for the platform. Tactility 0.8 has no
 //                  published SDK yet, so this one is BUILT: Tactility's sources
-//                  at a pinned commit are checked out and compiled for a generic
-//                  board of that chip, then packaged with Tactility's own
-//                  release script - exactly what its CI does to publish one.
-//                  When 0.8.0 is released this becomes a pinned download.
+//                  at a pinned commit are checked out and compiled - for a
+//                  generic board of the chip, or as the simulator for a posix
+//                  platform - then packaged with Tactility's own release script,
+//                  exactly what its CI does to publish one. When 0.8.0 is
+//                  released the device SDKs become a pinned download.
+//
+// A posix platform is the Tactility simulator, which runs on Linux only. It
+// needs no ESP-IDF; its SDK is the simulator's own build, and an app for it is
+// a shared object the simulator loads.
 //
 // The app build tool comes from a second pinned checkout, TactilityTool: its
 // tactility.py, and its CDN/sdkconfig.app.<chip> files - the app configuration
@@ -53,21 +58,25 @@ public:
     /// The TactilityTool checkout: tactility.py and CDN/sdkconfig.app.<chip>.
     static std::string ToolDir();
     /// Where the packaged SDKs live, in the layout tactility.py's --local-sdk
-    /// expects: <base>/<version>-<target>/TactilitySDK. It is what an app build
-    /// sets TACTILITY_SDK_PATH to.
+    /// expects: <base>/<version>-<platform>/TactilitySDK. It is what an app
+    /// build sets TACTILITY_SDK_PATH to.
     static std::string SdkBase();
-    /// The packaged SDK for one chip.
-    static std::string SdkDir(const std::string& idfTarget);
+    /// The packaged SDK for one platform: a chip ("esp32s3") or "posix-<arch>".
+    static std::string SdkDir(const std::string& platform);
 
-    /// Whether the SDK for this chip has been built and the tool checked out.
-    /// The release script writes idf-version.txt last, so its presence means
-    /// packaging finished.
-    static bool IsBuilt(const std::string& idfTarget);
+    /// Whether `platform` is the simulator rather than a chip.
+    static bool IsPosix(const std::string& platform);
 
-    /// Check out the pinned sources if needed, build them for `idfTarget` and
-    /// package the SDK. Runs in `idfPath`'s environment. Output goes to onLine.
-    /// Returns an empty string on success, else what went wrong.
-    static std::string Build(const std::string& idfTarget, const std::string& idfPath,
+    /// Whether the SDK for this platform has been built and the tool checked
+    /// out. Each release script writes a known file last, so its presence
+    /// means packaging finished.
+    static bool IsBuilt(const std::string& platform);
+
+    /// Check out the pinned sources if needed, build them for `platform` and
+    /// package the SDK. A chip builds in `idfPath`'s ESP-IDF environment; the
+    /// simulator ignores it. Output goes to onLine. Returns an empty string on
+    /// success, else what went wrong.
+    static std::string Build(const std::string& platform, const std::string& idfPath,
                              const std::function<void(const std::string&)>& onLine,
                              const std::atomic<bool>* cancel);
 };

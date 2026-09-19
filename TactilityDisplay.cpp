@@ -11,6 +11,7 @@ extern "C"
 #include <lvgl/module.h>
 #include <tactility/device.h>
 #include <tactility/drivers/display.h>
+#include <tactility/error.h>
 #include <tactility/module.h>
 }
 #endif
@@ -269,8 +270,18 @@ void TactilityDisplay::PushRect(const uint8_t* framebuffer, int fbWidth, Deki::C
         if (device_try_lock(m_Device, kLockTimeoutTicks))
         {
             // End coordinates are exclusive, matching Tactility's contract.
-            display_draw_bitmap(m_Device, x0, y, x1, bandEnd, source);
+            const error_t result = display_draw_bitmap(m_Device, x0, y, x1, bandEnd, source);
             device_unlock(m_Device);
+            // A panel that refuses every draw leaves the screen on whatever it
+            // showed last while the game runs on unseen, so say so - once with
+            // the reason, then as a running count rather than every band.
+            if (result != ERROR_NONE)
+            {
+                ++m_DrawFailures;
+                if (m_DrawFailures == 1 || (m_DrawFailures % 1000) == 0)
+                    DEKI_LOG_ERROR("TactilityDisplay: the panel refused a draw (%s); %u refused so far",
+                                   error_to_string(result), m_DrawFailures);
+            }
         }
         else
         {

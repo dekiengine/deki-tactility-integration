@@ -10,6 +10,7 @@ set(PACKAGE_SOURCES
     TactilityDisplay.cpp
     TactilityInput.cpp
     TactilityFileSystem.cpp
+    TactilityApp.cpp
 )
 set(PACKAGE_ENTRY TactilityPackage.cpp)
 set(PACKAGE_LINK_DEPS deki-input)

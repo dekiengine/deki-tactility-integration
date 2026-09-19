@@ -1,0 +1,28 @@
+{
+  "id": "tactility_simulator",
+  "displayName": "Tactility App (Simulator)",
+  "family": "tactility",
+  "framework": "tactility",
+  "screenWidth": 640,
+  "screenHeight": 480,
+  "colorFormat": "RGB565",
+  "defines": [
+    "DEKI_LOG_ENABLED"
+  ],
+  "provides": [
+    "tactility",
+    "filesystem",
+    "threads"
+  ],
+  "requiresPackages": [
+    "deki-tactility-integration"
+  ],
+  "bootScene": "platforms/tactility_simulator/boot.scene",
+  "frameworkOptions": {
+    "tactilityPlatform": "posix-x86_64",
+    "appId": "com.example.dekigame",
+    "targetSdk": "0.8.0-dev",
+    "appVersion": "0.1.0",
+    "appVersionCode": "1"
+  }
+}

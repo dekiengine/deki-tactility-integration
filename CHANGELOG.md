@@ -32,6 +32,38 @@ firmware.
   `tactility.py` and its `CDN/sdkconfig.app.<chip>` files, so an app build
   never needs Tactility's CDN.
 - `platforms/tactility_esp32s3/`: the platform template and its boot scene.
+- `TactilityApp.cpp`: the app's `main()`, which Tactility calls on the app's
+  own task. It installs the memory, filesystem and time providers
+  (`TactilityTimeProvider`, over FreeRTOS ticks), loads the asset export from
+  `F:/storage/`, runs `Deki::Main()`, and stops the engine's loop when the OS
+  sends `APP_EVENT_CLOSE`. The app id comes from the platform's `appId`.
+- **The simulator builds and runs end to end.** `platforms/tactility_simulator/`
+  (`tactilityPlatform: posix-x86_64`, 640x480 RGB565) needs no ESP-IDF: its
+  TactilitySDK is the simulator itself, built from the pinned sources and
+  packaged with `release-sdk-posix.py`. The build compiles the engine,
+  packages and game into the shared object the simulator loads, through the
+  pinned `tactility.py`; the deploy step installs and runs it over the
+  simulator's development service. Linux only (WSL works); the editor on
+  Windows refuses the platform with that reason.
+- An app is compiled with `-fno-gnu-unique`. GCC's unique symbols make glibc
+  keep a library loaded forever, so a relaunch in the simulator ran on the
+  previous launch's state and crashed.
+- The backend checks `appId`, `appName` and `appVersion` against Tactility's
+  own manifest rules, which otherwise refuse the app only at install. The
+  app's name is the platform's `appName`, else the project's name.
+- A deploy fails when `tactility.py` prints its failure mark: its exit code is
+  0 for a refused install, and the device then answers `run` for an app it
+  does not have.
+- `TactilityDisplay` reports a draw the panel refuses (once, then a count);
+  it ignored the result.
 
-Not yet run on hardware or in the simulator. Requires ESP32-S3 or ESP32-P4:
-other supported chips cannot execute relocated app code from PSRAM.
+Verified: deki-demo builds, installs and runs in the simulator (engine up,
+startup scene loaded, relaunch clean, close event honoured). Its frames are
+not visible in the stock simulator, which presents through an OpenGL SDL
+renderer bound to LVGL's thread, so a raw-display app's draws from its own
+task go nowhere; a minimal app with no Deki code in it shows the same. With
+the simulator's renderer switched to SDL's software one, the game renders and
+animates. Not yet run on hardware. A device app needs ESP32-S3 or ESP32-P4
+(other chips cannot execute relocated app code from PSRAM), and building one
+is not written yet: the game still has to be compiled as an ESP-IDF
+component.
