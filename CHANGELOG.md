@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.17.0
 
 Initial package. Runs a Deki game as an external Tactility app rather than as
 firmware.
