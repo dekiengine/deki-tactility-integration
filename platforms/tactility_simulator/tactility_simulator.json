@@ -3,8 +3,8 @@
   "displayName": "Tactility App (Simulator)",
   "family": "tactility",
   "framework": "tactility",
-  "screenWidth": 640,
-  "screenHeight": 480,
+  "screenWidth": 320,
+  "screenHeight": 240,
   "colorFormat": "RGB565",
   "defines": [
     "DEKI_LOG_ENABLED"

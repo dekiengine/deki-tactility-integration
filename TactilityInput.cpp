@@ -1,4 +1,6 @@
 #include "TactilityInput.h"
+#include "TactilityKeys.h"
+#include "TactilityWindowDisplay.h"
 
 #include <deki/LogSystem.h>
 #include <deki/Time.h>
@@ -15,20 +17,6 @@ extern "C"
 namespace DekiTactility
 {
 
-namespace
-{
-// Deki's generic key ids. The engine keeps these in src/InputKeys.h, which is
-// private to the engine, so every input package restates the handful it needs —
-// deki-sdl3-integration does the same.
-constexpr uint32_t kKeyEnter = 13;
-constexpr uint32_t kKeyEsc = 27;
-constexpr uint32_t kKeyBackspace = 8;
-constexpr uint32_t kKeyUp = 1001;
-constexpr uint32_t kKeyDown = 1002;
-constexpr uint32_t kKeyLeft = 1003;
-constexpr uint32_t kKeyRight = 1004;
-}  // namespace
-
 uint32_t TactilityInput::TranslateCodePoint(uint32_t codepoint)
 {
 #if defined(DEKI_TACTILITY_TARGET)
@@ -36,13 +24,13 @@ uint32_t TactilityInput::TranslateCodePoint(uint32_t codepoint)
     {
         // Enter, escape and backspace already agree: Tactility spells them as
         // the C0 control codes, which is exactly what Deki's ids are.
-        case CODEPOINT_ENTER:     return kKeyEnter;
-        case CODEPOINT_ESCAPE:    return kKeyEsc;
-        case CODEPOINT_BACKSPACE: return kKeyBackspace;
-        case CODEPOINT_ARROW_UP:    return kKeyUp;
-        case CODEPOINT_ARROW_DOWN:  return kKeyDown;
-        case CODEPOINT_ARROW_LEFT:  return kKeyLeft;
-        case CODEPOINT_ARROW_RIGHT: return kKeyRight;
+        case CODEPOINT_ENTER:     return Keys::kEnter;
+        case CODEPOINT_ESCAPE:    return Keys::kEsc;
+        case CODEPOINT_BACKSPACE: return Keys::kBackspace;
+        case CODEPOINT_ARROW_UP:    return Keys::kUp;
+        case CODEPOINT_ARROW_DOWN:  return Keys::kDown;
+        case CODEPOINT_ARROW_LEFT:  return Keys::kLeft;
+        case CODEPOINT_ARROW_RIGHT: return Keys::kRight;
         default:
             break;
     }
@@ -143,8 +131,50 @@ void TactilityInput::Update()
 {
     if (!m_Initialized)
         return;
+
+    // In a window, LVGL is running and owns the pointer and keyboard: reading
+    // the devices here as well would split the keystrokes between the two.
+    // The window's canvas collects them instead.
+    if (TactilityWindowDisplay* window = TactilityWindowDisplay::Active())
+    {
+        window->DrainInput([this](const DekiInput::InputEvent& event) { Track(event); Emit(event); });
+        return;
+    }
+
     PollPointer();
     PollKeyboard();
+}
+
+void TactilityInput::Track(const DekiInput::InputEvent& event)
+{
+    switch (event.type)
+    {
+        case DekiInput::InputEventType::MOUSE_BUTTON_DOWN:
+        case DekiInput::InputEventType::MOUSE_MOVE:
+            m_Touched = (event.type == DekiInput::InputEventType::MOUSE_BUTTON_DOWN) || m_Touched;
+            m_TouchX = event.x;
+            m_TouchY = event.y;
+            break;
+        case DekiInput::InputEventType::MOUSE_BUTTON_UP:
+            m_Touched = false;
+            break;
+        case DekiInput::InputEventType::KEY_DOWN:
+            if (!IsKeyPressed(event.key) && m_HeldKeyCount < kMaxHeldKeys)
+                m_HeldKeys[m_HeldKeyCount++] = event.key;
+            break;
+        case DekiInput::InputEventType::KEY_UP:
+            for (int i = 0; i < m_HeldKeyCount; ++i)
+            {
+                if (m_HeldKeys[i] == event.key)
+                {
+                    m_HeldKeys[i] = m_HeldKeys[--m_HeldKeyCount];
+                    break;
+                }
+            }
+            break;
+        default:
+            break;
+    }
 }
 
 void TactilityInput::PollPointer()
@@ -258,6 +288,7 @@ void TactilityInput::PollKeyboard()
 bool TactilityInput::Initialize() { return false; }
 void TactilityInput::Shutdown() {}
 void TactilityInput::Update() {}
+void TactilityInput::Track(const DekiInput::InputEvent&) {}
 void TactilityInput::PollPointer() {}
 void TactilityInput::PollKeyboard() {}
 

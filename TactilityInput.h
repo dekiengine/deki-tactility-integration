@@ -21,6 +21,10 @@ namespace DekiTactility
  *
  * Both devices are optional: a board with a touch panel and no keyboard, or a
  * keyboard and no touch, works with whichever it has.
+ *
+ * That is when the game owns the panel. When it runs in a window
+ * (TactilityWindowDisplay) LVGL is running and owns both devices, so the input
+ * comes from the window's canvas instead, already in game coordinates.
  */
 class TactilityInput : public DekiInput::IDekiInput
 {
@@ -41,6 +45,9 @@ class TactilityInput : public DekiInput::IDekiInput
     void PollPointer();
     void PollKeyboard();
     void Emit(const DekiInput::InputEvent& event);
+    /// Keep the pointer position and held keys up to date from an event that
+    /// arrived already formed (from a window's canvas).
+    void Track(const DekiInput::InputEvent& event);
 
     /// Tactility reports a Unicode codepoint, never a scan code. Printable
     /// characters pass through as their codepoint; the named keys it spells as

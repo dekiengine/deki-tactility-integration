@@ -8,6 +8,7 @@
 #include <deki/Engine.h>
 
 #include "TactilityDisplay.h"
+#include "TactilityWindowDisplay.h"
 #endif
 
 namespace DekiTactility
@@ -16,11 +17,15 @@ namespace DekiTactility
 #if !defined(DEKI_EDITOR) && defined(DEKI_PACKAGE_TACTILITY)
 
 // The package owns the display's lifetime; engine-core only holds the pointer.
-static std::unique_ptr<TactilityDisplay> s_Display;
+static std::unique_ptr<Deki::IDisplay> s_Display;
 
 void TactilityDisplaySetup::Setup(SetupCallback onComplete)
 {
-    s_Display = std::make_unique<TactilityDisplay>();
+    const bool window = (mode == TactilityDisplayMode::Window);
+    if (window)
+        s_Display = std::make_unique<TactilityWindowDisplay>();
+    else
+        s_Display = std::make_unique<TactilityDisplay>();
 
     // 0x0 means "no expectation": on Tactility the OS owns the panel and
     // reports its real resolution, so there is nothing useful to assert here.
@@ -29,12 +34,12 @@ void TactilityDisplaySetup::Setup(SetupCallback onComplete)
     if (s_Display && s_Display->Initialize(0, 0))
     {
         Deki::Engine::GetInstance().SetDisplay(s_Display.get(), "Tactility");
-        DEKI_LOG_INFO("TactilityDisplaySetup: display ready");
+        DEKI_LOG_INFO("TactilityDisplaySetup: display ready (%s)", window ? "window" : "panel");
         onComplete(true);
     }
     else
     {
-        DEKI_LOG_ERROR("TactilityDisplaySetup: failed to take over the display");
+        DEKI_LOG_ERROR("TactilityDisplaySetup: failed to set up the display (%s)", window ? "window" : "panel");
         s_Display.reset();
         onComplete(false);
     }

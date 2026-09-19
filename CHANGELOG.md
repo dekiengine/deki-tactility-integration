@@ -56,14 +56,25 @@ firmware.
   does not have.
 - `TactilityDisplay` reports a draw the panel refuses (once, then a count);
   it ignored the result.
+- **Window mode**: `TactilityDisplaySetup.mode` is `Panel` (take the whole
+  display over and stop LVGL, as before; the default) or `Window`
+  (`TactilityWindowDisplay`): the game runs in an app window from Tactility's
+  window manager, with LVGL and the OS - status bar, launcher - still running,
+  shown 1:1 at the platform's screen size in a canvas LVGL draws. Input then
+  comes from LVGL events on that canvas, since LVGL owns the pointer and
+  keyboard; LVGL reports a key only as it goes down, so it arrives as a press
+  and an immediate release. Uses only functions Tactility exports to apps.
+- The simulator platform runs in window mode at 320x240.
+- The key ids live in one header (`TactilityKeys.h`) for both input paths.
 
-Verified: deki-demo builds, installs and runs in the simulator (engine up,
-startup scene loaded, relaunch clean, close event honoured). Its frames are
-not visible in the stock simulator, which presents through an OpenGL SDL
-renderer bound to LVGL's thread, so a raw-display app's draws from its own
-task go nowhere; a minimal app with no Deki code in it shows the same. With
-the simulator's renderer switched to SDL's software one, the game renders and
-animates. Not yet run on hardware. A device app needs ESP32-S3 or ESP32-P4
+Verified in the simulator: deki-demo builds, installs, runs, relaunches and
+closes. In window mode it renders and animates on the stock simulator with
+the OS UI around it. In panel mode it runs but nothing shows there: the
+stock simulator presents through an OpenGL SDL renderer bound to LVGL's
+thread, so a raw-display app's draws from its own task go nowhere (a minimal
+app with no Deki code shows the same; with the simulator's renderer switched
+to software, panel mode renders too). Window-mode input is not exercised yet:
+deki-demo takes none. Not yet run on hardware. A device app needs ESP32-S3 or ESP32-P4
 (other chips cannot execute relocated app code from PSRAM), and building one
 is not written yet: the game still has to be compiled as an ESP-IDF
 component.

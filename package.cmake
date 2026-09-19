@@ -8,6 +8,7 @@ set(PACKAGE_SOURCES
     TactilityDisplaySetup.cpp
     TactilityInputSetup.cpp
     TactilityDisplay.cpp
+    TactilityWindowDisplay.cpp
     TactilityInput.cpp
     TactilityFileSystem.cpp
     TactilityApp.cpp
