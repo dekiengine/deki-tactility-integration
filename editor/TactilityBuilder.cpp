@@ -1,10 +1,10 @@
 // Builds a Deki game as an external Tactility app instead of as firmware.
 //
-// Ships in this package and loads through the editor's builder-plugin path, so
-// the editor knows nothing about Tactility. It is the first real consumer of
-// that path, and deliberately so: Tactility is not under NDA, which makes it
-// the only chance to prove the surface works while the code is still something
-// anyone can read. A console backend gets no such luxury.
+// Ships in this package's editor/ folder, so it is compiled into the package's
+// editor-side DLL and registered when a project has the package installed -
+// the same way deki-esp32-integration ships the ESP-IDF backend - and never
+// into an app build, which leaves editor/ out. The editor knows nothing about
+// Tactility.
 //
 // What Tactility wants, and why this does not look like the ESP-IDF builder:
 //   - the artifact is a relocatable ELF loaded at runtime, not a firmware image
@@ -18,14 +18,19 @@
 #include <deki-editor/build/PlatformConfig.h>
 #include <deki-editor/build/TargetBuilder.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include <vector>
 
 namespace fs = std::filesystem;
-using namespace DekiEditor;
 
+// Named, not `using namespace`: the package build compiles several sources as
+// one translation unit, and a file-scope using-directive would leak into the
+// runtime sources batched after this one.
+namespace DekiEditor
+{
 namespace
 {
 
@@ -167,16 +172,27 @@ class TactilityBuilder : public ITargetBuilder
     }
 
     void Build(const std::string& projectPath, BuildOutputCallback out,
-               BuildProgressCallback) override
+               BuildProgressCallback progress) override
     {
-        // Not yet: this drives tactility.py, which needs ESP-IDF 5.5 and a
-        // TactilitySDK. Generation is what is proven so far, and claiming more
-        // than that in a status line would be a lie.
+        // A failure, not a success with a caveat. It used to report Completed
+        // here, which the editor turns into "Firmware build succeeded" for an
+        // app that was never compiled. What is missing: running tactility.py
+        // against ESP-IDF 5.5 and a TactilitySDK, and copying the engine,
+        // packages and game sources into the generated project, which today
+        // compiles nothing of the game.
+        const std::string reason = "Tactility apps cannot be built yet: the build files in " +
+                                   GetBuildDirectory(projectPath) +
+                                   " are generated, but compiling them is not wired up.";
         if (out)
-            out("Tactility: build files generated in " + GetBuildDirectory(projectPath) +
-                    ". Running tactility.py is not wired up yet.",
-                false);
-        m_State = BuildState::Completed;
+            out(reason, true);
+        m_State = BuildState::Failed;
+        if (progress)
+        {
+            BuildProgress p;
+            p.state = BuildState::Failed;
+            p.error = reason;
+            progress(p);
+        }
     }
 
     // --- not yet meaningful for this target ---
@@ -194,10 +210,14 @@ class TactilityBuilder : public ITargetBuilder
     void SetPlatformConfig(const PlatformConfig& c) override { m_Config = c; }
     void ClearPlatformConfig() override { m_Config = {}; }
     void SetPackageDefines(const std::vector<std::string>& d) override { m_Defines = d; }
-    bool IsToolchainInstalled() const override { return true; }
+    // Not "true": nothing is installed or even looked for yet, and a build
+    // checks this first, so saying yes only moved the failure somewhere less
+    // clear.
+    bool IsToolchainInstalled() const override { return false; }
     std::string GetToolchainStatus() const override
     {
-        return "Needs ESP-IDF 5.5 and a TactilitySDK; not managed by the editor yet.";
+        return "Needs ESP-IDF 5.5, TactilityTool and a TactilitySDK; this backend does not install "
+               "them yet";
     }
     void InstallToolchainComponent(const std::string&, BuildProgressCallback) override {}
     std::string GetEnginePath(const std::string&) const override { return ""; }
@@ -211,13 +231,14 @@ class TactilityBuilder : public ITargetBuilder
 };
 
 }  // namespace
+}  // namespace DekiEditor
 
 extern "C" {
 
 DEKI_BUILDER_API const DekiBuilderAbi* DekiBuilder_GetAbi(void)
 {
-    static const DekiBuilderAbi abi = DekiBuilder_ThisAbi((uint32_t)sizeof(PlatformConfig),
-                                                           (uint32_t)sizeof(CMakeGen::PackageEntry));
+    static const DekiBuilderAbi abi = DekiBuilder_ThisAbi((uint32_t)sizeof(DekiEditor::PlatformConfig),
+                                                           (uint32_t)sizeof(DekiEditor::CMakeGen::PackageEntry));
     return &abi;
 }
 
@@ -225,14 +246,14 @@ DEKI_BUILDER_API const char* DekiBuilder_GetName(void) { return "Deki Tactility 
 DEKI_BUILDER_API const char* DekiBuilder_GetVersion(void) { return "0.1.0"; }
 DEKI_BUILDER_API int DekiBuilder_GetBuilderCount(void) { return 1; }
 
-DEKI_BUILDER_API ITargetBuilder* DekiBuilder_CreateBuilder(int index)
+DEKI_BUILDER_API DekiEditor::ITargetBuilder* DekiBuilder_CreateBuilder(int index)
 {
-    return index == 0 ? new TactilityBuilder() : nullptr;
+    return index == 0 ? new DekiEditor::TactilityBuilder() : nullptr;
 }
 
-DEKI_BUILDER_API void DekiBuilder_DestroyBuilder(ITargetBuilder* builder)
+DEKI_BUILDER_API void DekiBuilder_DestroyBuilder(DekiEditor::ITargetBuilder* builder)
 {
-    delete builder;
+    delete builder;  // in THIS module: its vtable and operator delete live here
 }
 
 }  // extern "C"

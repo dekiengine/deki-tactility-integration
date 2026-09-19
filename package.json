@@ -3,9 +3,6 @@
   "displayName": "Tactility Integration",
   "minEngine": "0.16.0",
   "buildDefine": "DEKI_PACKAGE_TACTILITY",
-  "platforms": [
-    "tactility"
-  ],
   "platformRequires": [
     "tactility"
   ],
