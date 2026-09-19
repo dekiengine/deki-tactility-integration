@@ -14,6 +14,7 @@
 //     through the on-device App Hub
 
 #include <deki-editor/build/BuilderPlugin.h>
+#include <deki-editor/build/CMakeGenUtils.h>
 #include <deki-editor/build/PlatformConfig.h>
 #include <deki-editor/build/TargetBuilder.h>
 
@@ -87,9 +88,16 @@ class TactilityBuilder : public ITargetBuilder
         return problems;
     }
 
-    // Flashing is not a thing here: a Tactility app is installed over Wi-Fi,
-    // from an SD card or through the App Hub, never with esptool.
-    bool SupportsFlash() const override { return false; }
+    // No deploy step yet. A Tactility app is installed over Wi-Fi
+    // (tactility.py install <ip>), from an SD card or through the App Hub,
+    // never flashed; until one of those is wired up the editor shows no
+    // button rather than one that cannot work. When it is, the deploy targets
+    // are device addresses, not serial ports.
+    bool SupportsDeploy() const override { return false; }
+
+    // The app bundle is assembled by tactility.py from the build directory;
+    // nothing reads a separate boot payload yet, so none is asked for.
+    std::string GetBootPayloadDirectory(const std::string&) const override { return ""; }
 
     bool GenerateBuildFiles(const std::string& projectPath, const PlatformConfig& config,
                             const std::vector<std::string>& packageDefines) override
@@ -171,24 +179,11 @@ class TactilityBuilder : public ITargetBuilder
         m_State = BuildState::Completed;
     }
 
-    void Flash(const std::string&, const std::string&, BuildOutputCallback out,
-               BuildProgressCallback) override
-    {
-        if (out)
-            out("Tactility apps are not flashed. Install over Wi-Fi (tactility.py install <ip>), "
-                "from an SD card, or through the on-device App Hub.",
-                true);
-    }
-
     // --- not yet meaningful for this target ---
     void Clean(const std::string& projectPath, BuildOutputCallback, BuildProgressCallback) override
     {
         std::error_code ec;
         fs::remove_all(GetBuildDirectory(projectPath), ec);
-    }
-    void SetTarget(const std::string&, const std::string&, BuildOutputCallback,
-                   BuildProgressCallback) override
-    {
     }
     void Cancel() override {}
     bool IsBuilding() const override { return false; }
@@ -206,10 +201,6 @@ class TactilityBuilder : public ITargetBuilder
     }
     void InstallToolchainComponent(const std::string&, BuildProgressCallback) override {}
     std::string GetEnginePath(const std::string&) const override { return ""; }
-    std::vector<std::string> GetSupportedTargets() const override
-    {
-        return ExecutableFromPsramTargets();
-    }
     std::string GetPlatformKey() const override { return "tactility"; }
 
    private:
@@ -225,7 +216,8 @@ extern "C" {
 
 DEKI_BUILDER_API const DekiBuilderAbi* DekiBuilder_GetAbi(void)
 {
-    static const DekiBuilderAbi abi = DekiBuilder_ThisAbi((uint32_t)sizeof(PlatformConfig));
+    static const DekiBuilderAbi abi = DekiBuilder_ThisAbi((uint32_t)sizeof(PlatformConfig),
+                                                           (uint32_t)sizeof(CMakeGen::PackageEntry));
     return &abi;
 }
 
