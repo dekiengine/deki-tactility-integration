@@ -17,9 +17,18 @@
 #include <deki-editor/build/CMakeGenUtils.h>
 #include <deki-editor/build/PlatformConfig.h>
 #include <deki-editor/build/TargetBuilder.h>
+#include <deki-editor/build/ToolchainComponentManager.h>
+#include <deki-editor/build/BuilderDefinition.h>
+#include <deki-editor/EditorPaths.h>
+#include <deki/LogSystem.h>
+
+#include "TactilityToolchain.h"
+#include "TactilityToolchainDefinition.h"
 
 #include <algorithm>
+#include <atomic>
 #include <filesystem>
+#include <thread>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -58,6 +67,24 @@ std::string Join(const std::vector<std::string>& v, const char* sep)
 class TactilityBuilder : public ITargetBuilder
 {
    public:
+    TactilityBuilder()
+    {
+        BuilderDefinition def;
+        std::string error;
+        if (ParseBuilderDefinition(kTactilityToolchainDefinition, def, error))
+            m_ToolchainMgr.Initialize(def);
+        else
+            DEKI_LOG_ERROR("Tactility backend: its own toolchain definition does not parse (%s)",
+                           error.c_str());
+    }
+
+    ~TactilityBuilder() override
+    {
+        m_SdkCancel = true;
+        if (m_SdkThread.joinable())
+            m_SdkThread.join();
+    }
+
     const char* GetName() const override { return "Tactility App"; }
     std::string GetFrameworkId() const override { return "tactility"; }
     const char* GetDescription() const override
@@ -176,10 +203,11 @@ class TactilityBuilder : public ITargetBuilder
     {
         // A failure, not a success with a caveat. It used to report Completed
         // here, which the editor turns into "Firmware build succeeded" for an
-        // app that was never compiled. What is missing: running tactility.py
-        // against ESP-IDF 5.5 and a TactilitySDK, and copying the engine,
-        // packages and game sources into the generated project, which today
-        // compiles nothing of the game.
+        // app that was never compiled. The toolchain installs now (ESP-IDF 6.1
+        // and a TactilitySDK built from the pinned sources); what is missing is
+        // copying the engine, packages and game sources into the generated
+        // project, which today compiles nothing of the game, and running
+        // tactility.py on it.
         const std::string reason = "Tactility apps cannot be built yet: the build files in " +
                                    GetBuildDirectory(projectPath) +
                                    " are generated, but compiling them is not wired up.";
@@ -210,20 +238,136 @@ class TactilityBuilder : public ITargetBuilder
     void SetPlatformConfig(const PlatformConfig& c) override { m_Config = c; }
     void ClearPlatformConfig() override { m_Config = {}; }
     void SetPackageDefines(const std::vector<std::string>& d) override { m_Defines = d; }
-    // Not "true": nothing is installed or even looked for yet, and a build
-    // checks this first, so saying yes only moved the failure somewhere less
-    // clear.
-    bool IsToolchainInstalled() const override { return false; }
+    // ---- toolchain: ESP-IDF 6.1 (shared with the ESP32 package) + the SDK ----
+
+    bool IsToolchainInstalled() const override { return IdfReady() && TactilitySdk::IsBuilt(Target()); }
+
     std::string GetToolchainStatus() const override
     {
-        return "Needs ESP-IDF 5.5, TactilityTool and a TactilitySDK; this backend does not install "
-               "them yet";
+        if (!IdfReady())
+            return "ESP-IDF 6.1 is not installed; install the ESP-IDF SDK component";
+        if (!TactilitySdk::IsBuilt(Target()))
+            return "The TactilitySDK " + std::string(TactilityPin::kVersion) + " for " + Target() +
+                   " has not been built; install the TactilitySDK component";
+        return "ESP-IDF 6.1 and TactilitySDK " + std::string(TactilityPin::kVersion) + " for " + Target() +
+               " are installed";
     }
-    void InstallToolchainComponent(const std::string&, BuildProgressCallback) override {}
+
+    std::vector<ToolchainComponent> GetToolchainComponents() const override
+    {
+        std::vector<ToolchainComponent> components = m_ToolchainMgr.GetComponents();
+
+        ToolchainComponent sdk;
+        sdk.id = "tactility-sdk";
+        sdk.displayName = "TactilitySDK (" + Target() + ")";
+        sdk.canInstall = true;
+        sdk.canSetup = false;
+        sdk.latestVersion = std::string(TactilityPin::kVersion) + " @ " +
+                            std::string(TactilityPin::kCommit).substr(0, 12);
+        if (m_SdkBusy)
+            sdk.status = ToolchainComponentStatus::Installing;
+        else if (TactilitySdk::IsBuilt(Target()))
+        {
+            sdk.status = ToolchainComponentStatus::Installed;
+            sdk.installedVersion = sdk.latestVersion;
+        }
+        else
+            sdk.status = ToolchainComponentStatus::NotInstalled;
+        sdk.tooltip = "Built from Tactility's sources at the pinned commit (0.8 has no published SDK "
+                      "yet), plus TactilityTool's app build tool and configuration. Needs the ESP-IDF "
+                      "SDK first; takes a while.";
+        components.push_back(sdk);
+        return components;
+    }
+
+    void InstallToolchainComponent(const std::string& componentId, BuildProgressCallback cb) override
+    {
+        if (componentId != "tactility-sdk")
+        {
+            m_ToolchainMgr.InstallComponent(componentId, cb);
+            return;
+        }
+
+        auto fail = [&cb](const std::string& error)
+        {
+            if (cb)
+            {
+                BuildProgress p;
+                p.state = BuildState::Failed;
+                p.error = error;
+                cb(p);
+            }
+        };
+        if (m_SdkBusy)
+            return fail("The TactilitySDK is already being built");
+        if (!IdfReady())
+            return fail("Install the ESP-IDF SDK component first: the TactilitySDK is built with it");
+
+        if (m_SdkThread.joinable())
+            m_SdkThread.join();
+        m_SdkBusy = true;
+        m_SdkCancel = false;
+        const std::string target = Target();
+        const std::string idfPath = IdfPath();
+        m_SdkThread = std::thread(
+            [this, target, idfPath, cb]()
+            {
+                auto line = [&cb](const std::string& text)
+                {
+                    if (cb)
+                    {
+                        BuildProgress p;
+                        p.state = BuildState::Building;
+                        p.statusText = text;
+                        cb(p);
+                    }
+                };
+                const std::string error = TactilitySdk::Build(target, idfPath, line, &m_SdkCancel);
+                if (cb)
+                {
+                    BuildProgress p;
+                    p.state = error.empty() ? BuildState::Completed : BuildState::Failed;
+                    p.statusText = error.empty() ? "TactilitySDK built" : "";
+                    p.error = error;
+                    p.progress = 1.0f;
+                    cb(p);
+                }
+                m_SdkBusy = false;
+            });
+    }
+
+    void SetupToolchainComponent(const std::string& componentId, BuildProgressCallback cb) override
+    {
+        m_ToolchainMgr.SetupComponent(componentId, cb);
+    }
+
+    bool IsToolchainBusy() const override { return m_ToolchainMgr.IsBusy() || m_SdkBusy; }
     std::string GetEnginePath(const std::string&) const override { return ""; }
     std::string GetPlatformKey() const override { return "tactility"; }
 
    private:
+    std::string Target() const
+    {
+        const std::string t = m_Config.Option("idfTarget");
+        return t.empty() ? std::string("esp32s3") : t;
+    }
+
+    std::string IdfPath() const { return EditorPaths::GetToolchainsDir() + "/espressif/esp-idf"; }
+
+    // Installed AND at the pinned version: the manager reports a different
+    // version as UpdateAvailable, which is not good enough to build with.
+    bool IdfReady() const
+    {
+        for (const auto& c : m_ToolchainMgr.GetComponents())
+            if (c.id == "esp-idf")
+                return c.status == ToolchainComponentStatus::Installed;
+        return false;
+    }
+
+    ToolchainComponentManager m_ToolchainMgr;
+    std::thread m_SdkThread;
+    std::atomic<bool> m_SdkBusy{ false };
+    std::atomic<bool> m_SdkCancel{ false };
     BuildState m_State = BuildState::Idle;
     BuildOptions m_Options;
     PlatformConfig m_Config;
