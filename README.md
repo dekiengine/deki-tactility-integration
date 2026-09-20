@@ -19,21 +19,20 @@ Hub - rather than replacing its firmware.
 Two boot SetupComponents bring them up: `TactilityDisplaySetup` and
 `TactilityInputSetup`.
 
-## No LVGL
+## Straight to the panel
 
-Tactility ships LVGL and most apps draw with it. This package deliberately does
-not.
+Tactility ships LVGL and most apps draw with it. This one drives the panel
+directly, the way Tactility's own `GraphicsDemo` does: the display setup stops
+the LVGL module and blits the finished framebuffer itself.
 
-Deki renders a complete framebuffer, so an LVGL canvas would only be a surface
-to blit into - pure overhead. It would also bind the app to the curated subset
-of LVGL functions the `lvgl-module` exports, and a symbol missing from that list
-fails when the app is *loaded*, not when it is built.
+Deki already renders a complete frame, so an LVGL canvas would just be a
+surface to blit into. Going direct also keeps the app off the curated subset of
+LVGL functions the `lvgl-module` exports, where a missing symbol fails when the
+app is *loaded* rather than when it is built.
 
-Instead the display setup stops the LVGL module and drives the panel directly,
-the same way Tactility's own `GraphicsDemo` does. Input is read from the pointer
-and keyboard drivers, which are the *source* of key events - LVGL is only a
-translator of them into `LV_KEY_*`, so nothing is lost by skipping it. Physical
-keyboards on the T-Deck and Cardputer work.
+Input comes from the pointer and keyboard drivers, which are the *source* of
+key events; LVGL only translates them into `LV_KEY_*`. Physical keyboards on
+the T-Deck and Cardputer work.
 
 ## Band staging, and why
 
