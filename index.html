@@ -121,7 +121,7 @@ Components</h1>
 </table>
 <h1 class="doxsection"><a class="anchor" id="autotoc_md1"></a>
 Feature flags</h1>
-<p>Features this package can be built without. One with no define is stripped by its component types instead.</p>
+<p>Parts you can leave out of a build. A feature with no define is stripped with its components instead.</p>
 <table class="markdownTable">
 <tr class="markdownTableHead">
 <th class="markdownTableHeadNone">Feature  </th><th class="markdownTableHeadNone">Define  </th><th class="markdownTableHeadNone">Default  </th></tr>
@@ -177,7 +177,7 @@ Changelog</h1>
 <p>Verified in the simulator: deki-demo builds, installs, runs, relaunches and closes. In window mode it renders and animates on the stock simulator with the OS UI around it. In panel mode it runs but nothing shows there: the stock simulator presents through an OpenGL SDL renderer bound to LVGL's thread, so a raw-display app's draws from its own task go nowhere (a minimal app with no Deki code shows the same; with the simulator's renderer switched to software, panel mode renders too). Window-mode input is not exercised yet: deki-demo takes none. Not yet run on hardware. A device app needs ESP32-S3 or ESP32-P4 (other chips cannot execute relocated app code from PSRAM), and building one is not written yet: the game still has to be compiled as an ESP-IDF component.</p>
 <p>Earlier releases: <a href="https://github.com/dekiengine/deki-tactility-integration/blob/master/CHANGELOG.md">CHANGELOG.md</a>.</p>
 <hr  />
-<p>Generated from this package's reflection metadata (engine 0.16.0). Property names are the keys scene files use, and a rename ships with an alias (<a href="https://github.com/dekiengine/deki-editor/blob/master/COMPATIBILITY.md">compatibility</a>). </p>
+<p>Generated from the package's reflection data (engine 0.16.0). Property names are the keys used in scene files. Renames keep an alias (<a href="https://github.com/dekiengine/deki-editor/blob/master/COMPATIBILITY.md">compatibility</a>). </p>
 </div></div><!-- PageDoc -->
 <a href="doxygen_crawl.html"></a>
 </div><!-- contents -->
