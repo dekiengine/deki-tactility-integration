@@ -121,7 +121,7 @@ Components</h1>
 </table>
 <h1 class="doxsection"><a class="anchor" id="autotoc_md1"></a>
 Feature flags</h1>
-<p>Parts you can leave out of a build. A feature with no define is stripped with its components instead.</p>
+<p>Parts you can leave out of a build. A feature with a define is switched there; the rest are stripped with their components.</p>
 <table class="markdownTable">
 <tr class="markdownTableHead">
 <th class="markdownTableHeadNone">Feature  </th><th class="markdownTableHeadNone">Define  </th><th class="markdownTableHeadNone">Default  </th></tr>
@@ -153,10 +153,10 @@ Changelog</h1>
 0.17.0</h2>
 <p>Initial package. Runs a Deki game as an external Tactility app rather than as firmware.</p>
 <ul>
-<li><span class="tt">TactilityDisplay</span> — <span class="tt">IDisplay</span> over the raw panel driver, no LVGL. Band-staged <span class="tt">display_draw_bitmap()</span> because a panel may DMA from the caller's buffer unless it advertises <span class="tt">DISPLAY_CAPABILITY_PREFER_EXTERNAL_RAM</span>; the staging copy is skipped on panels that do. Handles byte-swapped RGB565 and RGB888.</li>
-<li><span class="tt">TactilityInput</span> — <span class="tt">IDekiInput</span> over <span class="tt">pointer_*</span> and <span class="tt">keyboard_read_key()</span>. Touch transitions are synthesised, since Tactility reports current points rather than events. Keyboard codepoints map onto Deki's key ids; enter, escape and backspace already coincide because both sides use the C0 control codes.</li>
-<li><span class="tt">TactilityFileSystem</span> — <span class="tt">IFileSystem</span> mapping <span class="tt">F:/</span> to the app's assets directory and <span class="tt">S:/</span> to its user data directory.</li>
-<li><span class="tt">TactilityDisplaySetup</span>, <span class="tt">TactilityInputSetup</span> — boot components.</li>
+<li><span class="tt">TactilityDisplay</span> - <span class="tt">IDisplay</span> over the raw panel driver, no LVGL. Band-staged <span class="tt">display_draw_bitmap()</span> because a panel may DMA from the caller's buffer unless it advertises <span class="tt">DISPLAY_CAPABILITY_PREFER_EXTERNAL_RAM</span>; the staging copy is skipped on panels that do. Handles byte-swapped RGB565 and RGB888.</li>
+<li><span class="tt">TactilityInput</span> - <span class="tt">IDekiInput</span> over <span class="tt">pointer_*</span> and <span class="tt">keyboard_read_key()</span>. Touch transitions are synthesised, since Tactility reports current points rather than events. Keyboard codepoints map onto Deki's key ids; enter, escape and backspace already coincide because both sides use the C0 control codes.</li>
+<li><span class="tt">TactilityFileSystem</span> - <span class="tt">IFileSystem</span> mapping <span class="tt">F:/</span> to the app's assets directory and <span class="tt">S:/</span> to its user data directory.</li>
+<li><span class="tt">TactilityDisplaySetup</span>, <span class="tt">TactilityInputSetup</span> - boot components.</li>
 <li>Build backend (<span class="tt">editor/TactilityBuilder.cpp</span>, framework <span class="tt">tactility</span>), registered when a project has this package installed. It validates the platform (esp32s3/esp32p4, an <span class="tt">appId</span>) and generates the app project. Building fails with a reason: the generated project does not yet contain the game.</li>
 <li>Its toolchain installs through the Build panel or <span class="tt">--install-toolchain</span>: ESP-IDF 6.1 (the same pinned component and install path as deki-esp32-integration, so the two share one copy), and the TactilitySDK, which Tactility 0.8 does not publish yet. The SDK is BUILT: Tactility's sources at a pinned commit (<span class="tt">65ee2238764d</span>, CI-green, ESP-IDF 6.1) are checked out, compiled for the chip's generic board and packaged with Tactility's own release script. The same component checks out TactilityTool at a pinned commit (<span class="tt">ad2d8a79e21e</span>, the ESP-IDF 6.1 update) for <span class="tt">tactility.py</span> and its <span class="tt">CDN/sdkconfig.app.&lt;chip&gt;</span> files, so an app build never needs Tactility's CDN.</li>
 <li><span class="tt">platforms/tactility_esp32s3/</span>: the platform template and its boot scene.</li>
