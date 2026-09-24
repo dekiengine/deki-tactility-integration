@@ -229,6 +229,15 @@ void TactilityDisplay::PushRect(const uint8_t* framebuffer, int fbWidth, Deki::C
         return;
     }
 
+    // Never past the panel or the framebuffer: the band holds one panel row
+    // per line, and the driver is not asked to draw off its edge. The engine
+    // sizes the framebuffer to this panel, so this only ever trims a caller's
+    // mistake.
+    if (x0 < 0) x0 = 0;
+    if (y0 < 0) y0 = 0;
+    if (x1 > m_DisplayWidth) x1 = m_DisplayWidth;
+    if (y1 > m_DisplayHeight) y1 = m_DisplayHeight;
+    if (x1 > fbWidth) x1 = fbWidth;
     if (x1 <= x0 || y1 <= y0)
         return;
 
@@ -238,8 +247,42 @@ void TactilityDisplay::PushRect(const uint8_t* framebuffer, int fbWidth, Deki::C
     const size_t fbStride = (size_t)fbWidth * bpp;
 
     // A full-width rect out of a buffer the panel may read directly needs no
-    // staging at all: its rows are already contiguous.
+    // staging at all: its rows are already contiguous. A narrower one from such
+    // a buffer has no band to gather into, so each row goes on its own.
     const bool direct = (m_Band == nullptr) && (x0 == 0) && (x1 == fbWidth);
+    const bool rowByRow = (m_Band == nullptr) && !direct;
+
+    auto draw = [&](int32_t top, int32_t bottom, const uint8_t* source)
+    {
+        if (device_try_lock(m_Device, kLockTimeoutTicks))
+        {
+            // End coordinates are exclusive, matching Tactility's contract.
+            const error_t result = display_draw_bitmap(m_Device, x0, top, x1, bottom, source);
+            device_unlock(m_Device);
+            // A panel that refuses every draw leaves the screen on whatever it
+            // showed last while the game runs on unseen, so say so - once with
+            // the reason, then as a running count rather than every band.
+            if (result != ERROR_NONE)
+            {
+                ++m_DrawFailures;
+                if (m_DrawFailures == 1 || (m_DrawFailures % 1000) == 0)
+                    DEKI_LOG_ERROR("TactilityDisplay: the panel refused a draw (%s); %u refused so far",
+                                   error_to_string(result), m_DrawFailures);
+            }
+        }
+        else
+        {
+            DEKI_LOG_WARNING("TactilityDisplay: panel lock timed out, dropped rows %d-%d",
+                             (int)top, (int)bottom);
+        }
+    };
+
+    if (rowByRow)
+    {
+        for (int32_t y = y0; y < y1; ++y)
+            draw(y, y + 1, framebuffer + (size_t)y * fbStride + (size_t)x0 * bpp);
+        return;
+    }
 
     for (int32_t y = y0; y < y1; y += kBandRows)
     {
@@ -266,28 +309,7 @@ void TactilityDisplay::PushRect(const uint8_t* framebuffer, int fbWidth, Deki::C
             }
             source = m_Band;
         }
-
-        if (device_try_lock(m_Device, kLockTimeoutTicks))
-        {
-            // End coordinates are exclusive, matching Tactility's contract.
-            const error_t result = display_draw_bitmap(m_Device, x0, y, x1, bandEnd, source);
-            device_unlock(m_Device);
-            // A panel that refuses every draw leaves the screen on whatever it
-            // showed last while the game runs on unseen, so say so - once with
-            // the reason, then as a running count rather than every band.
-            if (result != ERROR_NONE)
-            {
-                ++m_DrawFailures;
-                if (m_DrawFailures == 1 || (m_DrawFailures % 1000) == 0)
-                    DEKI_LOG_ERROR("TactilityDisplay: the panel refused a draw (%s); %u refused so far",
-                                   error_to_string(result), m_DrawFailures);
-            }
-        }
-        else
-        {
-            DEKI_LOG_WARNING("TactilityDisplay: panel lock timed out, dropped rows %d-%d",
-                             (int)y, (int)bandEnd);
-        }
+        draw(y, bandEnd, source);
     }
 }
 

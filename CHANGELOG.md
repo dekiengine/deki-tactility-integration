@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Presenting clamps to the panel, and a partial update from a buffer the panel
+  reads directly goes row by row. The first could overflow the staging band;
+  the second wrote into a band that did not exist.
+
 ## 0.17.0
 
 Initial package. Runs a Deki game as an external Tactility app rather than as
