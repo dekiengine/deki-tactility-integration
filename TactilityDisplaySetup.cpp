@@ -29,7 +29,7 @@ void TactilityDisplaySetup::Setup(SetupCallback onComplete)
 
     // 0x0 means "no expectation": on Tactility the OS owns the panel and
     // reports its real resolution, so there is nothing useful to assert here.
-    // (The project's baked target size lives in dproject.bin, which the engine
+    // (The project's baked target size lives in project_data.bin, which the engine
     // reads during boot — not reliably before this component runs.)
     if (s_Display && s_Display->Initialize(0, 0))
     {

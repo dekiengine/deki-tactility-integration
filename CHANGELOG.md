@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Changed
+- The app carries its assets in `assets/assets/` (`F:/assets/`), exported by
+  the build itself; `--export` is no longer needed first. The engine loads
+  them.
 - The panel display reports the format the OS gives it; window mode reports
   RGB565. The build no longer defines a colour format.
 

@@ -282,7 +282,7 @@ class TactilityBuilder : public FirmwareBuilderBase
     }
 
     // The app's assets directory, which tactility.py packs into the .app: the
-    // boot payload (dproject.bin, boot.scene) lands at its root, which the
+    // boot payload (project_data.bin, boot.scene) lands at its root, which the
     // app reads as F:/.
     std::string GetBootPayloadDirectory(const std::string& projectPath) const override
     {
@@ -838,20 +838,12 @@ class TactilityBuilder : public FirmwareBuilderBase
         const fs::path assets = root / "assets";
         std::error_code ec;
 
-        // The boot payload was exported into assets/ before the build files
-        // were generated. The asset export is the project's own, from
-        // --export; it ships beside it, where the app reads F:/storage/.
-        if (!fs::is_regular_file(assets / "dproject.bin", ec))
-            return Fail(out, progress, "No boot payload in " + assets.string() + "; build through the editor");
-        const fs::path storage = fs::path(projectPath) / "storage";
-        if (!fs::is_regular_file(storage / "asset_table.bin", ec))
-            return Fail(out, progress,
-                        "The project has no asset export (" + storage.string() + "); run --export first");
-        fs::remove_all(assets / "storage", ec);
-        fs::copy(storage, assets / "storage", fs::copy_options::recursive, ec);
-        if (ec)
-            return Fail(out, progress, "Could not copy the asset export into the app: " + ec.message());
-        Report(out, "Asset export copied into " + (assets / "storage").string(), false);
+        // The boot payload and the assets (assets/assets/, F:/assets/ in the
+        // app) were exported into assets/ before the build files were
+        // generated.
+        if (!fs::is_regular_file(assets / "project_data.bin", ec) ||
+            !fs::is_regular_file(assets / "assets" / "asset_table.bin", ec))
+            return Fail(out, progress, "No boot payload and assets in " + assets.string() + "; build through the editor");
 
         const int code = RunShellCommand(ToolCommand(root, "build -a " + platform + " --local-sdk"), root.string(),
                                          [&out](const std::string& line) { if (out) out(line, false); },

@@ -14,7 +14,7 @@ namespace DekiTactility
  * natural home for each:
  *
  *   F:/  flash    -> the app's ASSETS directory. Read-only game data that ships
- *                    inside the .app bundle: dproject.bin and boot.scene.
+ *                    inside the .app bundle: project_data.bin and boot.scene.
  *   S:/  SD card  -> the app's USER DATA directory. Anything the game writes,
  *                    which Tactility documents as surviving OS upgrades.
  *
