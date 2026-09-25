@@ -47,6 +47,8 @@ class TactilityWindowDisplay : public Deki::IDisplay
                         const Deki::Rect* rects, int32_t count) override;
 
     void GetDisplaySize(int32_t* width, int32_t* height) const override;
+    // The LVGL canvas it draws into is RGB565.
+    Deki::ColorFormat GetColorFormat() const override { return Deki::ColorFormat::RGB565; }
     bool IsInitialized() const override { return m_Initialized; }
     void RequestFullRefresh() override {}
     bool ProcessEvents() override { return true; }

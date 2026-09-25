@@ -542,17 +542,6 @@ class TactilityBuilder : public FirmwareBuilderBase
             return false;
         }
 
-        const std::string colorFormat = config.colorFormat.empty() ? std::string("RGB565") : config.colorFormat;
-        for (char c : colorFormat)
-        {
-            const bool ok = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_';
-            if (!ok)
-            {
-                DEKI_LOG_ERROR("Tactility backend: colorFormat '%s' is not an identifier", colorFormat.c_str());
-                return false;
-            }
-        }
-
         const auto allPackages = CMakeGen::ScanPackageManifests(projectPath);
         const auto activeIds = CMakeGen::ResolveActivePackages(allPackages, packageDefines, config.Capabilities());
         std::string transformWhy;
@@ -615,7 +604,6 @@ class TactilityBuilder : public FirmwareBuilderBase
           << "    DEKI_TACTILITY_TARGET\n"
           << "    \"DEKI_SCREEN_WIDTH=" << config.screenWidth << "\"\n"
           << "    \"DEKI_SCREEN_HEIGHT=" << config.screenHeight << "\"\n"
-          << "    \"DEKI_DEFAULT_COLOR_FORMAT=Deki::ColorFormat::" << colorFormat << "\"\n"
           << "    \"DEKI_ENABLE_TRANSPARENCY=true\"\n"
           << "    \"DEKI_FAST_ATTR=\"";
         if (m_BuildOptions.enableLogging)

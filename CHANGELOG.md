@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+- The panel display reports the format the OS gives it; window mode reports
+  RGB565. The build no longer defines a colour format.
+
 ### Fixed
 - Presenting clamps to the panel, and a partial update from a buffer the panel
   reads directly goes row by row. The first could overflow the staging band;

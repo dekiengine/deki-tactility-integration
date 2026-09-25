@@ -54,6 +54,7 @@ class TactilityDisplay : public Deki::IDisplay
                         const Deki::Rect* rects, int32_t count) override;
 
     void GetDisplaySize(int32_t* width, int32_t* height) const override;
+    Deki::ColorFormat GetColorFormat() const override { return m_PanelFormat; }
     bool IsInitialized() const override { return m_Initialized; }
     void RequestFullRefresh() override;
     bool ProcessEvents() override;
