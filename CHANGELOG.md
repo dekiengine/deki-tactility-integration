@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.17.1
 
 ### Changed
 - The app carries its assets in `assets/assets/` (`F:/assets/`), exported by
