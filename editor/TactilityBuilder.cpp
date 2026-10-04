@@ -1,10 +1,9 @@
 // Builds a Deki game as an external Tactility app instead of as firmware.
 //
-// Ships in this package's editor/ folder, so it is compiled into the package's
-// editor-side DLL and registered when a project has the package installed -
-// the same way deki-esp32-integration ships the ESP-IDF backend - and never
-// into an app build, which leaves editor/ out. The editor knows nothing about
-// Tactility.
+// Lives in this package's editor/ folder, so it is compiled into the package's
+// editor-side DLL and registered when a project has the package installed (as
+// deki-esp32-integration ships the ESP-IDF backend), and never into an app
+// build, which leaves editor/ out. The editor knows nothing about Tactility.
 //
 // What Tactility wants, and why this does not look like the ESP-IDF builder:
 //   - the artifact is an app loaded at runtime, not a firmware image: a
@@ -19,9 +18,9 @@
 //   idfTarget          a chip, "esp32s3" or "esp32p4" - a device app
 //   tactilityPlatform  "posix-x86_64" - the Tactility simulator, on Linux
 //
-// Only the simulator builds end to end today. A device app needs the same
-// sources compiled as an ESP-IDF component instead of a CMake target, which
-// is not written yet, and Build() says so.
+// Only the simulator builds end to end. A device app needs the same sources
+// compiled as an ESP-IDF component instead of a CMake target; that is not
+// written yet, and Build() says so.
 
 #include <deki-editor/build/BuilderPlugin.h>
 #include <deki-editor/build/BuilderDefinition.h>
@@ -62,11 +61,10 @@ namespace
 
 /// Chips whose silicon can execute a relocated ELF out of PSRAM.
 ///
-/// Espressif's elf_loader can only map PSRAM onto the instruction bus on these
+/// Espressif's elf_loader can map PSRAM onto the instruction bus only on these
 /// two. On the classic ESP32 and the C6 an app's code must live in internal
-/// RAM, and an engine does not fit there — Tactility itself runs fine on those
-/// boards, and small apps do too, but not this one. Refusing here is much
-/// kinder than a -ENOMEM at load time on the device.
+/// RAM, and an engine does not fit there (Tactility and small apps do). Refusing
+/// here beats a -ENOMEM at load time on the device.
 const std::vector<std::string>& ExecutableFromPsramTargets()
 {
     static const std::vector<std::string> kTargets = { "esp32s3", "esp32p4" };
@@ -116,8 +114,8 @@ bool IsAlnum(char c)
 // Tactility's own manifest rules (app-module manifest.cpp and
 // package_manifest_parsing.cpp at the pinned commit). An app that breaks one
 // builds and packages fine and is then refused at install, so they are
-// checked here instead. Its fields are copied into 32-byte buffers that keep
-// a terminator, hence 31.
+// checked here. The fields are copied into 32-byte buffers with a terminator,
+// hence 31.
 
 /// app.0.id, and the binary name (app.0.binary is the same string): letters,
 /// digits and '.', 5 to 31 characters. It also reaches a C string literal and
@@ -280,12 +278,10 @@ public:
 
     // ---- deploy: the simulator only, over its development service ----------
     //
-    // Installs the app and leaves it there: it appears in the OS's Apps menu
-    // like any other and is opened from it, rather than started over whatever
-    // the user was doing. A device app is installed the same way
-    // (tactility.py install <address>), but a device build does not exist
-    // yet, so a device platform shows no button rather than one that cannot
-    // work.
+    // Installs the app without starting it: it appears in the OS's Apps menu
+    // like any other and is opened from there. A device app installs the same
+    // way (tactility.py install <address>), but there is no device build yet,
+    // so a device platform shows no button.
 
     bool SupportsDeploy() const override { return IsSimulator(); }
     const char* GetDeployLabel() const override { return "Install"; }
@@ -579,7 +575,7 @@ private:
 
     std::string IdfPath() const { return EditorPaths::GetToolchainsDir() + "/espressif/esp-idf"; }
 
-    // Installed AND at the pinned version: the manager reports a different
+    // Installed and at the pinned version: the manager reports a different
     // version as UpdateAvailable, which is not good enough to build with.
     bool IdfReady() const
     {
@@ -658,13 +654,13 @@ private:
           // Everything ends up inside a shared object, the engine's static
           // library included.
           << "set(CMAKE_POSITION_INDEPENDENT_CODE ON)\n"
-          // Every launch must start from nothing, as it does on a device,
-          // where the loader relocates a fresh copy each time. GCC marks
-          // template statics and inline variables STB_GNU_UNIQUE, and glibc
-          // never unloads a library that has one: the simulator's dlclose()
-          // then left the whole engine resident, and the next launch ran on
-          // the last one's state (memory counters, singletons) and crashed.
-          // For everything compiled into the app, so the engine as well.
+          // Every launch must start fresh, as on a device, where the loader
+          // relocates a new copy each time. GCC marks template statics and
+          // inline variables STB_GNU_UNIQUE, and glibc never unloads a library
+          // that has one, so after the simulator's dlclose() the next launch
+          // would run on the last one's state (memory counters, singletons)
+          // and crash. Applies to everything compiled into the app, the
+          // engine included.
           << "add_compile_options(-fno-gnu-unique)\n\n";
 
         // Absolute, and rewritten on every build: tactility.py runs the
@@ -1021,7 +1017,7 @@ private:
         //
         // tactility.py's exit code does not say whether this worked: a refused
         // install prints its failure mark and still exits 0. The mark
-        // (print_status_error's "❌") is the tool's only failure signal here.
+        // (print_status_error's "❌") is the only failure signal.
         bool toolFailed = false;
         const int code = RunShellCommand(
             ToolCommand(root, "install --host " + host + " --local-sdk"), root.string(),
@@ -1091,7 +1087,7 @@ extern "C"
 
     DEKI_BUILDER_API void DekiBuilderDestroyBuilder(DekiEditor::ITargetBuilder* builder)
     {
-        delete builder;  // in THIS module: its vtable and operator delete live here
+        delete builder;  // in this module: its vtable and operator delete live here
     }
 
 }  // extern "C"

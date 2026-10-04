@@ -25,15 +25,15 @@ void TactilityInputSetup::Setup(SetupCallback onComplete)
         return;
     }
 
-    // deki-input's class shares its name with its namespace, so a bare
-    // DekiInput:: resolves to the namespace, where SetInput is not a member.
-    // The alias says which is meant once — same as deki-sdl3-integration.
+    // deki-input's class has the same name as its namespace, so a bare
+    // DekiInput:: names the namespace, which has no SetInput. The alias names
+    // the class, as in deki-sdl3-integration.
     using DekiInputApi = DekiInput::DekiInput;
     DekiInputApi::SetInput(std::move(input), "Tactility");
 
-    // Create and register the dispatch system. Global scope, not
-    // DekiTactility::, because the editor's generated glue declares it that
-    // way. Idempotent.
+    // Creates and registers the dispatch system; safe to call twice. Global
+    // scope, not DekiTactility::, because the editor's generated glue
+    // declares it there.
     DekiInputInitSystem();
 
     DEKI_LOG_INFO("TactilityInputSetup: input ready");

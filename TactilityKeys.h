@@ -5,11 +5,10 @@
 namespace DekiTactility::Keys
 {
 
-// Deki's generic key ids. The engine keeps these in src/InputKeys.h, which is
-// private to the engine, so every input package restates the handful it needs —
-// deki-sdl3-integration does the same. One copy for this package: the raw
-// keyboard (TactilityInput) and LVGL's keys (TactilityWindowDisplay) both map
-// onto them.
+// Deki's generic key ids. The engine keeps them in src/InputKeys.h, which is
+// private, so each input package repeats the few it needs (as
+// deki-sdl3-integration does). The raw keyboard (TactilityInput) and LVGL's
+// keys (TactilityWindowDisplay) both map onto this one copy.
 inline constexpr uint32_t kEnter = 13;
 inline constexpr uint32_t kEsc = 27;
 inline constexpr uint32_t kBackspace = 8;

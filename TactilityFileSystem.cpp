@@ -71,11 +71,11 @@ std::string TactilityFileSystem::Resolve(const char* virtualPath) const
         return m_UserDataPath + "/" + (virtualPath + 3);
     }
 
-    // No prefix: the engine's Storage::Default. Treat it as user data, which is
-    // the only writable location an app has.
+    // No prefix: the engine's Storage::Default. Treated as user data, the only
+    // place an app can write.
     if (virtualPath[0] == '/')
     {
-        return virtualPath;  // already absolute, pass through untouched
+        return virtualPath;  // already absolute
     }
     return m_UserDataPath + "/" + virtualPath;
 }

@@ -1,19 +1,16 @@
-/**
- * @file TactilityApp.cpp
- * @brief The Tactility app's entry point.
- *
- * Tactility runs an external app by loading its binary and calling its
- * main() on the app's own task: a relocated ELF on a device, a dlopen()ed
- * shared object in the simulator. This is that main(). It brings up the
- * providers the engine needs, hooks the OS's close request into the engine's
- * main loop, and runs the game through Deki::Main() like every other target.
- *
- * What an app build ships, and where the engine finds it:
- *   assets/          (F:/) the boot payload: project_data.bin and boot.scene
- *   assets/assets/   (F:/assets/) the asset export: asset_table.bin,
- *                    pack_index.bin and the assets themselves
- * S:/ stays the app's user data directory, the one place it may write.
- */
+// The Tactility app's entry point.
+//
+// Tactility runs an external app by loading its binary and calling its main()
+// on the app's own task: a relocated ELF on a device, a dlopen()ed shared
+// object in the simulator. This is that main(). It sets up the providers the
+// engine needs, hooks the OS's close request into the engine's main loop, and
+// runs the game through Deki::Main() like every other target.
+//
+// What an app build ships, and where the engine finds it:
+//   assets/          (F:/) the boot payload: project_data.bin and boot.scene
+//   assets/assets/   (F:/assets/) the asset export: asset_table.bin,
+//                    pack_index.bin and the assets themselves
+// S:/ is the app's user data directory, the one place it may write.
 
 #if defined(DEKI_TACTILITY_TARGET) && !defined(DEKI_EDITOR)
 
@@ -49,8 +46,8 @@ namespace
 
 constexpr const char* kTag = "Deki";
 
-// The OS asks an app to close through an app event. Without listening for it
-// the app cannot be closed at all, so the engine's loop polls every frame and
+// The OS asks an app to close through an app event, and an app that does not
+// listen cannot be closed. The engine's loop polls for it every frame and
 // stops when one arrives.
 struct CloseListener
 {

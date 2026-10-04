@@ -3,35 +3,33 @@
 // Everything a Tactility app build needs, as components the editor's Build
 // panel (or --install-toolchain) installs:
 //
-//   esp-idf        ESP-IDF v6.1, the SDK Tactility itself builds with. The SAME
-//                  pinned component, at the SAME install path, as
+//   esp-idf        ESP-IDF v6.1, the SDK Tactility itself builds with. The same
+//                  pinned component, at the same install path, as
 //                  deki-esp32-integration declares, so a machine that builds
 //                  for both has one copy. The two pins must move together.
 //   tactility-sdk  The TactilitySDK for the platform. Tactility 0.8 has no
-//                  published SDK yet, so this one is BUILT: Tactility's sources
-//                  at a pinned commit are checked out and compiled - for a
-//                  generic board of the chip, or as the simulator for a posix
-//                  platform - then packaged with Tactility's own release script,
-//                  exactly what its CI does to publish one. When 0.8.0 is
-//                  released the device SDKs become a pinned download.
+//                  published SDK, so it is built: Tactility's sources at a
+//                  pinned commit are checked out and compiled (for a generic
+//                  board of the chip, or as the simulator for a posix
+//                  platform), then packaged with Tactility's own release
+//                  script, as its CI does. Once 0.8.0 is released the device
+//                  SDKs can be a pinned download.
 //
 // A posix platform is the Tactility simulator, which runs on Linux only. It
 // needs no ESP-IDF; its SDK is the simulator's own build, and an app for it is
 // a shared object the simulator loads.
 //
-// The simulator is built with ONE patch to the pinned sources: its display
+// The simulator is built with one patch to the pinned sources: its display
 // size, fixed at 640x480 upstream, comes from TACTILITY_SIMULATOR_RESOLUTION
 // ("320x240"), so it can stand in for the device a platform describes. The
-// deploy step starts it at the platform's screen size. Everything else is
-// Tactility's code as pinned; the patch is exact-match and refuses to apply
-// to sources it does not recognise.
+// deploy step starts it at the platform's screen size. The patch matches
+// exactly and refuses to apply to sources it does not recognise.
 //
 // The app build tool comes from a second pinned checkout, TactilityTool: its
-// tactility.py, and its CDN/sdkconfig.app.<chip> files - the app configuration
-// tactility.py otherwise downloads from Tactility's CDN on first use. Placing
-// them in an app's .tactility/ first means building an app never touches that
-// CDN, which is not always reachable (it was not, from this machine, on the
-// day this was written).
+// tactility.py, and its CDN/sdkconfig.app.<chip> files, the app configuration
+// tactility.py otherwise downloads from Tactility's CDN on first use. Copying
+// them into an app's .tactility/ first means an app build never needs that
+// CDN, which is not always reachable.
 
 #include <atomic>
 #include <functional>
@@ -74,21 +72,22 @@ public:
     /// Whether `platform` is the simulator rather than a chip.
     static bool IsPosix(const std::string& platform);
 
-    /// Whether the SDK for this platform has been built and the tool checked
-    /// out. Each release script writes a known file last, so its presence
-    /// means packaging finished.
+    /// Whether the SDK for this platform is built and the tool checked out.
+    /// Each release script writes a known file last, so that file means
+    /// packaging finished.
     static bool IsBuilt(const std::string& platform);
 
-    /// Check out the pinned sources if needed, build them for `platform` and
-    /// package the SDK. A chip builds in `idfPath`'s ESP-IDF environment; the
+    /// Checks out the pinned sources if needed, builds them for `platform` and
+    /// packages the SDK. A chip builds in `idfPath`'s ESP-IDF environment; the
     /// simulator ignores it. Output goes to onLine. Returns an empty string on
     /// success, else what went wrong.
     static std::string Build(const std::string& platform, const std::string& idfPath,
                              const std::function<void(const std::string&)>& onLine, const std::atomic<bool>* cancel);
 
-    /// Make sure a simulator is answering on this machine: use the one that
-    /// is, or start the built one at `width`x`height` with its development
-    /// service on, and wait for it. Returns an empty string on success.
+    /// Makes sure a simulator is answering on this machine: uses one that
+    /// already is, or starts the built one at `width`x`height` with its
+    /// development service on and waits for it. Returns an empty string on
+    /// success.
     static std::string EnsureSimulator(int width, int height, const std::function<void(const std::string&)>& onLine,
                                        const std::atomic<bool>* cancel);
 };

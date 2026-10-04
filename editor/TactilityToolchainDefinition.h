@@ -2,16 +2,16 @@
 
 // The downloadable part of the Tactility toolchain: ESP-IDF v6.1.
 //
-// This is deki-esp32-integration's esp-idf component - same id, same pinned
-// archive and digest, same install path - so the two packages share one ESP-IDF
-// on disk. The one difference is the setup step, which also installs the
-// ESP32-P4's RISC-V compiler, since an app can target either chip. Tactility
-// main builds with v6.1 as well. If the two pins
-// ever have to differ, the install paths must differ too, or each package would
-// keep replacing the other's SDK.
+// This is deki-esp32-integration's esp-idf component (same id, same pinned
+// archive and digest, same install path), so the two packages share one
+// ESP-IDF on disk. The one difference is the setup step, which also installs
+// the ESP32-P4's RISC-V compiler, since an app can target either chip.
+// Tactility main builds with v6.1 as well. If the two pins ever differ, the
+// install paths must differ too, or each package keeps replacing the other's
+// SDK.
 //
-// The TactilitySDK itself is not here: 0.8 has no published archive, so it is
-// built from source (TactilityToolchain.h).
+// The TactilitySDK is not here: 0.8 has no published archive, so it is built
+// from source (TactilityToolchain.h).
 
 namespace DekiEditor
 {

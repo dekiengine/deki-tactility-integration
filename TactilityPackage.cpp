@@ -1,14 +1,9 @@
-/**
- * @file TactilityPackage.cpp
- * @brief Package entry point for deki-tactility
- *
- * Exports the standard Deki plugin interface so the editor can load
- * deki-tactility.dll and keep the Tactility SetupComponents inspectable on a
- * desktop, even though nothing here can run there.
- *
- * Display, input and the filesystem are brought up by their SetupComponents
- * from the platform's boot scene.
- */
+// Package entry point for deki-tactility. Exports the standard Deki plugin
+// interface, so the editor can load deki-tactility.dll and inspect the
+// Tactility SetupComponents on a desktop, where none of them can run.
+//
+// Display, input and the filesystem are set up by their SetupComponents from
+// the platform's boot scene.
 
 #include "TactilityPackage.h"
 
@@ -35,9 +30,7 @@ using namespace DekiTactility;
 
 extern "C"
 {
-    /**
-     * @brief Ensure the deki-tactility package's components are registered
-     */
+    /// Registers the deki-tactility components, if not done yet.
     DEKI_TACTILITY_API int DekiTactilityEnsureRegistered(void)
     {
         if (s_TactilityRegistered)
@@ -103,10 +96,9 @@ extern "C"
 
 #else  // !DEKI_EDITOR — runtime
 
-// Component registration happens through the auto-generated
-// ::DekiTactilityRegisterComponents(), called by
-// DekiRegisterProjectPackages(). Display, input and the filesystem come up
-// as boot SetupComponents.
+// Components register through the generated
+// ::DekiTactilityRegisterComponents(), which DekiRegisterProjectPackages()
+// calls. Display, input and the filesystem are boot SetupComponents.
 
 }  // namespace DekiTactility
 

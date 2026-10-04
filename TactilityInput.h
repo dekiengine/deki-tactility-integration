@@ -10,22 +10,19 @@ struct Device;
 namespace DekiTactility
 {
 
-/**
- * @brief Deki input backed by Tactility's raw pointer and keyboard drivers.
- *
- * No LVGL. Tactility's keyboard driver is the *source* of key events and LVGL
- * is only a translator of them into LV_KEY_* — its own header says so — so an
- * app that never starts LVGL still gets a full keyboard through
- * `keyboard_read_key()`. That is what makes keyboard devices like the T-Deck
- * and the Cardputer usable here.
- *
- * Both devices are optional: a board with a touch panel and no keyboard, or a
- * keyboard and no touch, works with whichever it has.
- *
- * That is when the game owns the panel. When it runs in a window
- * (TactilityWindowDisplay) LVGL is running and owns both devices, so the input
- * comes from the window's canvas instead, already in game coordinates.
- */
+/// Deki input on Tactility's raw pointer and keyboard drivers.
+///
+/// When the game owns the panel, LVGL is not involved: the keyboard driver is
+/// the source of key events and LVGL only translates them to LV_KEY_*, so
+/// `keyboard_read_key()` gives the full keyboard without LVGL. That is what
+/// makes keyboard devices like the T-Deck and the Cardputer usable.
+///
+/// Both devices are optional: a board with touch and no keyboard, or a
+/// keyboard and no touch, works with whichever it has.
+///
+/// When the game runs in a window (TactilityWindowDisplay), LVGL runs and owns
+/// both devices, so input comes from the window's canvas, already in game
+/// coordinates.
 class TactilityInput : public DekiInput::IDekiInput
 {
 public:
@@ -45,8 +42,8 @@ private:
     void PollPointer();
     void PollKeyboard();
     void Emit(const DekiInput::InputEvent& event);
-    /// Keep the pointer position and held keys up to date from an event that
-    /// arrived already formed (from a window's canvas).
+    /// Updates the pointer position and held keys from an event that arrived
+    /// ready-made (from a window's canvas).
     void Track(const DekiInput::InputEvent& event);
 
     /// Tactility reports a Unicode codepoint, never a scan code. Printable
@@ -55,9 +52,8 @@ private:
     /// engine's own ids.
     static uint32_t TranslateCodePoint(uint32_t codepoint);
 
-    /// Guards against a wedged keyboard driver monopolising a frame: the
-    /// `continue_reading` flag asks us to drain, but a stuck controller would
-    /// otherwise never stop asking.
+    /// Limits key reads per frame: the `continue_reading` flag asks for more
+    /// reads, and a stuck controller would never stop asking.
     static constexpr int kMaxKeyReadsPerUpdate = 16;
 
     struct Device* m_Pointer = nullptr;
@@ -72,9 +68,8 @@ private:
     int32_t m_TouchX = 0;
     int32_t m_TouchY = 0;
 
-    /// Keys currently held, for IsKeyPressed(). Small and linear on purpose:
-    /// a handful of keys are held at once and this avoids a heap container in
-    /// the input path.
+    /// Keys currently held, for IsKeyPressed(). A small linear array: only a
+    /// few keys are held at once, and it keeps the heap out of the input path.
     static constexpr int kMaxHeldKeys = 8;
     uint32_t m_HeldKeys[kMaxHeldKeys] = {};
     int m_HeldKeyCount = 0;

@@ -148,9 +148,8 @@ void TactilityWindowDisplay::Shutdown()
 {
     if (m_WindowId != 0)
     {
-        // Deletes the canvas before the buffer it shows goes. A removed
-        // window's record goes with it, so DropWidgets is not called: forget
-        // the canvas here.
+        // Deletes the canvas before its buffer is freed. The window's record
+        // goes too, so DropWidgets is not called; forget the canvas here.
         window_manager_remove(m_WindowId);
         m_WindowId = 0;
         Lock();
@@ -176,11 +175,11 @@ void TactilityWindowDisplay::BuildWidgets(void* rootObject)
     lv_obj_t* canvas = lv_canvas_create(root);
     lv_canvas_set_buffer(canvas, m_Buffer, m_Width, m_Height, LV_COLOR_FORMAT_RGB565);
 
-    // Where the game would be on the bare panel - centred on the SCREEN, not
-    // in the window - with the OS's chrome drawn over it. A game as big as
-    // the screen then fills it and the status bar hides its top rows, rather
-    // than the game being pushed down and cut off at the bottom. The part
-    // outside the window is clipped, and the window must not scroll to it.
+    // Where the game would be on the bare panel: centred on the screen, not in
+    // the window, with the OS's chrome drawn over it. A game as big as the
+    // screen then fills it and the status bar hides its top rows, instead of
+    // the game being pushed down and cut off at the bottom. The part outside
+    // the window is clipped, and the window must not scroll to it.
     lv_obj_remove_flag(root, LV_OBJ_FLAG_SCROLLABLE);
     lv_display_t* display = lv_obj_get_display(root);
     const int32_t screenX = (lv_display_get_horizontal_resolution(display) - m_Width) / 2;
@@ -348,9 +347,8 @@ void TactilityWindowDisplay::PresentRegions(const uint8_t* framebuffer, int widt
                 CopyRect(framebuffer, width, rects[i].left, rects[i].top, rects[i].right, rects[i].bottom);
             }
         }
-        // Handing the buffer back drops LVGL's cached copy of the image and
-        // redraws it: a canvas written to directly otherwise shows its old
-        // pixels.
+        // Setting the buffer again drops LVGL's cached copy of the image and
+        // redraws it; a canvas written to directly would show its old pixels.
         lv_canvas_set_buffer(static_cast<lv_obj_t*>(m_Canvas), m_Buffer, m_Width, m_Height, LV_COLOR_FORMAT_RGB565);
     }
     Unlock();

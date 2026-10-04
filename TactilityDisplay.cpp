@@ -24,18 +24,15 @@ namespace DekiTactility
 namespace
 {
 
-/// How long to wait for the panel lock before giving up on a band.
-/// The display shares its bus with the SD card on many boards, so a lock can
-/// legitimately be held for a while; dropping one band is better than blocking
-/// the game loop indefinitely.
+/// How long to wait for the panel lock before giving up on a band. On many
+/// boards the display shares its bus with the SD card, so the lock can be held
+/// for a while; dropping one band is better than blocking the game loop.
 constexpr uint32_t kLockTimeoutTicks = 100;
 
-/// Map the panel's own format onto the engine's.
-///
-/// Returns false for formats Deki has no equivalent for. MONOCHROME and
-/// GRAYSCALE8 are real Tactility formats (e-paper, some OLEDs) that the engine
-/// cannot currently render into, so they are refused loudly at Initialize()
-/// rather than producing a scrambled panel at runtime.
+/// Maps the panel's own format to the engine's. Returns false for formats Deki
+/// has no equivalent for: MONOCHROME and GRAYSCALE8 (e-paper, some OLEDs)
+/// cannot be rendered into yet, so Initialize() refuses them with an error
+/// instead of scrambling the panel.
 bool MapPanelFormat(DisplayColorFormat panel, Deki::ColorFormat* out, bool* needsByteSwap)
 {
     *needsByteSwap = false;
@@ -54,7 +51,7 @@ bool MapPanelFormat(DisplayColorFormat panel, Deki::ColorFormat* out, bool* need
     }
 }
 
-/// Copy `pixels` 16-bit values, swapping each one's bytes.
+/// Copies `pixels` 16-bit values, swapping each one's bytes.
 void CopySwapped16(uint8_t* dst, const uint8_t* src, size_t pixels)
 {
     for (size_t i = 0; i < pixels; ++i)
@@ -89,7 +86,7 @@ bool TactilityDisplay::Initialize(int32_t width, int32_t height)
     }
 
     // Take the panel away from LVGL. Until this returns, LVGL owns the bus and
-    // anything we draw would race its flushes.
+    // any drawing would race its flushes.
     if (module_is_started(&lvgl_module))
     {
         module_stop(&lvgl_module);
@@ -124,16 +121,16 @@ bool TactilityDisplay::Initialize(int32_t width, int32_t height)
                          (int)m_DisplayWidth, (int)m_DisplayHeight);
     }
 
-    // A panel that promises never to DMA from the caller's pointer lets us skip
-    // the staging copy and hand the engine's own rows straight to the driver.
+    // A panel that promises never to DMA from the caller's pointer gets the
+    // engine's rows directly, with no staging copy.
     m_CanDrawFromExternalRam = display_has_capability(m_Device, DISPLAY_CAPABILITY_PREFER_EXTERNAL_RAM);
 
     if (!m_CanDrawFromExternalRam || m_NeedsByteSwap)
     {
         m_BandBytes = Deki::FrameBufferBytes(m_PanelFormat, m_DisplayWidth, kBandRows);
-        // DMA-capable, not merely internal: some internal regions are not
-        // reachable by the peripheral, and a panel reading one of those
-        // corrupts the display silently rather than failing.
+        // DMA-capable, not merely internal: the peripheral cannot reach some
+        // internal regions, and a panel reading one corrupts the display
+        // without any error.
         m_Band = (uint8_t*)Deki::Memory::AllocateDma(m_BandBytes, Deki::Memory::Internal);
         if (m_Band == nullptr)
         {
@@ -200,8 +197,8 @@ void TactilityDisplay::PresentRegions(const uint8_t* framebuffer, int width, int
         return;
     }
 
-    // count == 0 means nothing changed; an LCD holds its last frame, so there
-    // is genuinely nothing to do.
+    // count == 0 means nothing changed, and an LCD holds its last frame, so
+    // there is nothing to do.
     if (count == 0)
     {
         return;
@@ -213,9 +210,9 @@ void TactilityDisplay::PresentRegions(const uint8_t* framebuffer, int width, int
         return;
     }
 
-    // Deki::Rect is {left, top, right, bottom} and half-open, which is exactly
-    // what display_draw_bitmap() wants — its end coordinates are exclusive too.
-    // No conversion, and no off-by-one to get wrong.
+    // Deki::Rect is {left, top, right, bottom} and half-open, as
+    // display_draw_bitmap() wants (its end coordinates are exclusive too), so
+    // no conversion is needed.
     for (int32_t i = 0; i < count; ++i)
     {
         PushRect(framebuffer, width, format, rects[i].left, rects[i].top, rects[i].right, rects[i].bottom);
@@ -278,9 +275,9 @@ void TactilityDisplay::PushRect(const uint8_t* framebuffer, int fbWidth, Deki::C
             // End coordinates are exclusive, matching Tactility's contract.
             const error_t result = display_draw_bitmap(m_Device, x0, top, x1, bottom, source);
             device_unlock(m_Device);
-            // A panel that refuses every draw leaves the screen on whatever it
-            // showed last while the game runs on unseen, so say so - once with
-            // the reason, then as a running count rather than every band.
+            // A panel that refuses every draw leaves the screen frozen while
+            // the game runs unseen, so log it: once with the reason, then as a
+            // running count instead of every band.
             if (result != ERROR_NONE)
             {
                 ++m_DrawFailures;
@@ -373,8 +370,8 @@ bool TactilityDisplay::ProcessEvents()
 void TactilityDisplay::SetBacklight(bool on)
 {
     (void)on;
-    // Tactility exports display_get_backlight but no setter, and backlight is
-    // the OS's business anyway. Left deliberately unimplemented.
+    // Tactility exports display_get_backlight but no setter, and the backlight
+    // belongs to the OS, so this does nothing.
 }
 
 #else  // !DEKI_TACTILITY_TARGET — editor/host build, no Tactility SDK present
@@ -418,7 +415,7 @@ void TactilityDisplay::SetBacklight(bool)
 
 #endif  // DEKI_TACTILITY_TARGET
 
-// Overlay support is unimplemented on both paths — see the header.
+// Overlays are stubs on both paths; see the header.
 void* TactilityDisplay::CreateUIOverlay(int32_t, int32_t)
 {
     return nullptr;

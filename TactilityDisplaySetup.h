@@ -20,13 +20,10 @@ enum class TactilityDisplayMode : uint8_t
     Window = 1,
 };
 
-/**
- * @brief Boot component that gives the game its display on Tactility.
- *
- * Add this to a Tactility platform's boot scene. In Panel mode the panel's
- * resolution is a fact the OS reports, so it is queried rather than
- * configured; in Window mode the game keeps the platform's screen size.
- */
+/// Boot component that gives the game its display on Tactility. Add it to a
+/// Tactility platform's boot scene. In Panel mode the panel's resolution is
+/// asked from the OS, not configured; in Window mode the game keeps the
+/// platform's screen size.
 DEKI_CATEGORY("Tactility")
 DEKI_DESCRIPTION("Gives the game Tactility's display: the whole panel, or a window with the OS still running.")
 class DEKI_TACTILITY_API TactilityDisplaySetup : public Deki::SetupComponent

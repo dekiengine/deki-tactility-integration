@@ -10,28 +10,25 @@
 namespace DekiTactility
 {
 
-/**
- * @brief Deki display shown in an app window, with LVGL and the OS left running.
- *
- * The other way to run: TactilityDisplay takes the whole panel over and stops
- * LVGL, so the game owns the screen and nothing else draws. This one asks
- * Tactility's window manager for a window, like any LVGL app, and shows the
- * game's framebuffer in a canvas inside it: the status bar, the launcher and
- * the rest of the OS stay up around it.
- *
- * The game renders at its own size (the platform's screen size), placed where
- * it would be on the bare panel - centred on the screen - with the OS's chrome
- * drawn over it: a game the size of the screen fills it, and the status bar
- * hides its top rows. Each present copies the finished frame into the canvas's buffer
- * under the LVGL lock, and LVGL draws it from its own task. That is also what
- * makes it visible in the simulator, whose renderer belongs to LVGL's thread
- * and shows nothing drawn from any other.
- *
- * Input: LVGL owns the pointer and keyboard while it runs, so the canvas
- * collects their events (on LVGL's task) and TactilityInput drains them on the
- * game's. LVGL reports a key when it is pressed, not when it is released, so
- * a key arrives as a press immediately followed by a release.
- */
+/// Deki display shown in an app window, with LVGL and the OS left running.
+///
+/// The other mode is TactilityDisplay, which takes the whole panel and stops
+/// LVGL. This one asks Tactility's window manager for a window, like any LVGL
+/// app, and shows the game's framebuffer in a canvas inside it, with the
+/// status bar, the launcher and the rest of the OS still up.
+///
+/// The game renders at its own size (the platform's screen size), centred on
+/// the screen where it would be on the bare panel, with the OS's chrome drawn
+/// over it: a game the size of the screen fills it, and the status bar hides
+/// its top rows. Each present copies the finished frame into the canvas's
+/// buffer under the LVGL lock, and LVGL draws it from its own task. That is
+/// also what makes it visible in the simulator, whose renderer shows only
+/// what LVGL's thread draws.
+///
+/// Input: LVGL owns the pointer and keyboard while it runs, so the canvas
+/// collects their events (on LVGL's task) and TactilityInput takes them on the
+/// game's. LVGL reports a key only when it is pressed, so a key arrives as a
+/// press immediately followed by a release.
 class TactilityWindowDisplay : public Deki::IDisplay
 {
 public:
@@ -65,7 +62,7 @@ public:
     /// owns the panel. TactilityInput asks, to know where its input comes from.
     static TactilityWindowDisplay* Active();
 
-    /// Hand every input event the canvas has collected since the last call to
+    /// Hands every input event the canvas collected since the last call to
     /// `emit`, in order. Called on the game's task.
     template <typename Emit>
     void DrainInput(Emit&& emit);
@@ -81,7 +78,7 @@ private:
     bool Lock();
     void Unlock();
     void Queue(const DekiInput::InputEvent& event);
-    /// Copy one half-open rectangle into the canvas's buffer (LVGL lock held).
+    /// Copies one half-open rectangle into the canvas's buffer (LVGL lock held).
     void CopyRect(const uint8_t* framebuffer, int fbWidth, int32_t x0, int32_t y0, int32_t x1, int32_t y1);
 
     bool m_Initialized = false;
@@ -103,8 +100,8 @@ private:
 
     /// Events from LVGL's task, waiting for the game's. Guarded by the LVGL
     /// lock, which both sides already hold when they touch it. Fixed size: a
-    /// frame's worth of input is a handful of events, and a full queue drops
-    /// the newest rather than allocating on LVGL's task.
+    /// frame's input is a handful of events, and a full queue drops the newest
+    /// instead of allocating on LVGL's task.
     static constexpr int kQueueSize = 64;
     DekiInput::InputEvent m_Queue[kQueueSize] = {};
     int m_QueueCount = 0;

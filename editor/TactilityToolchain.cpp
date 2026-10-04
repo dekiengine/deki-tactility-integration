@@ -34,8 +34,8 @@ std::string Native(std::string p)
     return p;
 }
 
-// The simulator's one patch (see TactilityToolchain.h). Recorded in the SDK
-// it builds, so an SDK from before the patch counts as not built.
+// The simulator's one patch (see TactilityToolchain.h). Recorded in the SDK it
+// builds, so an SDK without the record counts as not built.
 constexpr const char* kSimulatorPatchMarker = "deki-simulator-patches.txt";
 constexpr const char* kSimulatorPatchId = "display-resolution-from-env 1";
 
@@ -196,9 +196,9 @@ std::string TactilitySdk::Build(const std::string& platform, const std::string& 
         return {};
     };
 
-    // A repository at a pinned commit. A partial clone: history without file
-    // contents, which is all a checkout of one commit needs. Then the checkout
-    // is verified - a pin nobody checks is not one.
+    // A repository at a pinned commit. A partial clone (history without file
+    // contents) is all a checkout of one commit needs. The checkout is then
+    // verified, so the pin is enforced.
     auto checkout = [&](const std::string& name, const std::string& url, const std::string& commit, const fs::path& dir,
                         bool submodules) -> std::string
     {
@@ -258,8 +258,8 @@ std::string TactilitySdk::Build(const std::string& platform, const std::string& 
     fs::remove_all(sdk, ec);
     fs::create_directories(sdk.parent_path(), ec);
 
-    // 2. Build and package, with Tactility's own scripts - the steps its CI
-    //    runs to publish an SDK.
+    // 2. Build and package with Tactility's own scripts, the steps its CI runs
+    //    to publish an SDK.
     fs::path script;
     std::string command;
     fs::path targetMarker;
@@ -271,13 +271,13 @@ std::string TactilitySdk::Build(const std::string& platform, const std::string& 
         }
         onLine("Simulator patched: display size from TACTILITY_SIMULATOR_RESOLUTION");
 
-        // The simulator: Tactility's root CMakeLists builds it whenever
-        // ESP-IDF is not in the environment, into buildsim/, which is where
-        // release-sdk-posix.py packages the libraries from. Testing and
-        // mbedtls's sample programs are off: they are most of the build time
-        // and no part of the SDK. The compiler is found the way the engine's
-        // own reflection codegen finds it, so the simulator, its SDK and an
-        // app built against it agree.
+        // The simulator: Tactility's root CMakeLists builds it into buildsim/
+        // when ESP-IDF is not in the environment, and release-sdk-posix.py
+        // packages the libraries from there. Tests and mbedtls's sample
+        // programs are off: they are most of the build time and not part of
+        // the SDK. The compiler is found the way the engine's reflection
+        // codegen finds it, so the simulator, its SDK and an app built against
+        // it agree.
         script = fs::path(Root()) / ("build-sdk-" + platform + ".sh");
         std::ofstream f(script, std::ios::binary | std::ios::trunc);
         f << "set -e\n"
@@ -294,8 +294,7 @@ std::string TactilitySdk::Build(const std::string& platform, const std::string& 
     else
     {
         // A generic board of the chip. A build tree left by the other chip is
-        // discarded first: idf.py refuses to switch targets under an existing
-        // one.
+        // removed first: idf.py refuses to switch targets in an existing one.
         targetMarker = src / "build" / ".deki-target";
         if (fs::exists(src / "build", ec) && ReadFirstLine(targetMarker) != platform)
         {
@@ -370,8 +369,9 @@ std::string TactilitySdk::EnsureSimulator(int width, int height, const std::func
     (void)cancel;
     return "the Tactility simulator runs on Linux only";
 #else
-    // tactility.py talks to the development service on port 6666; answering
-    // there is what "running" means. python3 is already required by the tool.
+    // tactility.py talks to the development service on port 6666, so a
+    // simulator that answers there is running. The tool already requires
+    // python3.
     const std::string probe =
         "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:6666/info', timeout=1)\"";
     auto quiet = [](const std::string&) {};
@@ -417,8 +417,9 @@ std::string TactilitySdk::EnsureSimulator(int width, int height, const std::func
         return "the simulator is not built (" + binary.string() + "); install the TactilitySDK component";
     }
 
-    // Its development service, the thing an app is installed through, is off
-    // until a setting turns it on at boot: the one its Development app writes.
+    // Its development service, through which apps are installed, is off
+    // unless a setting turns it on at boot (the one its Development app
+    // writes).
     const fs::path settings = data / "data" / "tactility" / "user" / "app" / "tactility.development";
     fs::create_directories(settings, ec);
     {
@@ -427,9 +428,9 @@ std::string TactilitySdk::EnsureSimulator(int width, int height, const std::func
     }
 
     // Detached from the editor (its own session, output to a log beside the
-    // SDK) so it outlives this deploy, like any simulator the user starts.
-    // $! is the simulator itself: setsid, not being a group leader here,
-    // execs rather than forks, and so does nohup.
+    // SDK) so it outlives this deploy, like a simulator the user starts. $! is
+    // the simulator itself: setsid, not being a group leader here, execs
+    // instead of forking, and so does nohup.
     const fs::path log = fs::path(Root()) / "simulator.log";
     onLine("Starting the Tactility simulator at " + resolution + " (log: " + log.string() + ")");
     const std::string start = "cd \"" + data.string() + "\" && TACTILITY_SIMULATOR_RESOLUTION=" + resolution +

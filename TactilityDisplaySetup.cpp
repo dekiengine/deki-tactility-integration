@@ -32,9 +32,9 @@ void TactilityDisplaySetup::Setup(SetupCallback onComplete)
     }
 
     // 0x0 means "no expectation": on Tactility the OS owns the panel and
-    // reports its real resolution, so there is nothing useful to assert here.
-    // (The project's baked target size lives in project_data.bin, which the engine
-    // reads during boot — not reliably before this component runs.)
+    // reports its real resolution. (The project's target size is in
+    // project_data.bin, which the engine may not have read before this
+    // component runs.)
     if (s_Display && s_Display->Initialize(0, 0))
     {
         Deki::Engine::GetInstance().SetDisplay(s_Display.get(), "Tactility");
@@ -53,8 +53,8 @@ void TactilityDisplaySetup::Setup(SetupCallback onComplete)
 
 void TactilityDisplaySetup::Setup(SetupCallback onComplete)
 {
-    // Editor or a non-Tactility target: nothing to set up, and saying so keeps
-    // the component inspectable on the desktop.
+    // Editor or a non-Tactility target: nothing to set up. Reporting success
+    // keeps the component usable on the desktop.
     onComplete(true);
 }
 

@@ -5,40 +5,31 @@
 #include <deki/Engine.h>  // ColorFormat
 #include <deki/providers/IDisplay.h>
 
-// Tactility's own types are only available when building an app against its
-// SDK. The editor loads this package too (so the SetupComponents stay
-// inspectable on a desktop), and there the device handle is just an opaque
-// pointer we never dereference.
+// Tactility's own types exist only when building an app against its SDK. The
+// editor loads this package too (so the SetupComponents can be inspected on a
+// desktop), and there the device handle is an opaque pointer that is never
+// dereferenced.
 struct Device;
 
 namespace DekiTactility
 {
 
-/**
- * @brief Deki display backed by Tactility's raw panel driver.
- *
- * Deliberately does NOT use LVGL. Deki renders a whole framebuffer, so an
- * lv_canvas would only be a surface to blit into — pure overhead, and it would
- * bind us to the curated ~450-symbol subset the lvgl module exports (a symbol
- * missing from that list fails when the app is LOADED, not when it is built).
- *
- * Instead the app stops the LVGL module and drives `display_draw_bitmap()`
- * directly, the way Tactility's own GraphicsDemo does.
- *
- * ## Why band staging
- *
- * `display_draw_bitmap()` MAY DMA straight out of the pointer it is given:
- * Tactility defines DISPLAY_CAPABILITY_PREFER_EXTERNAL_RAM as the panel's
- * promise that it does *not*. So unless a panel advertises that capability the
- * source must be DMA-capable memory, which on ESP32 means internal RAM — and
- * pinning a whole 320x240 RGB565 frame (150 KB) there is not affordable.
- *
- * So the framebuffer stays wherever the engine put it (PSRAM, typically) and we
- * copy it out in `kBandRows`-row bands through a small internal staging buffer.
- * This mirrors what LovyanGFXDisplay already does for the same reason. When the
- * panel does advertise PREFER_EXTERNAL_RAM we skip the staging copy entirely
- * and hand the engine's rows straight over.
- */
+/// Deki display on Tactility's raw panel driver.
+///
+/// LVGL is not used. Deki renders a whole framebuffer, so an lv_canvas would
+/// only be an extra surface to blit into, and it would tie the app to the
+/// ~450 symbols the lvgl module exports (a missing symbol fails when the app
+/// is loaded, not when it is built). The app stops the LVGL module and calls
+/// `display_draw_bitmap()` directly, as Tactility's own GraphicsDemo does.
+///
+/// Why band staging: `display_draw_bitmap()` may DMA straight out of the
+/// pointer it is given; DISPLAY_CAPABILITY_PREFER_EXTERNAL_RAM is the panel's
+/// promise that it does not. Without that capability the source must be
+/// DMA-capable memory, which on ESP32 means internal RAM, and a whole 320x240
+/// RGB565 frame (150 KB) does not fit there. So the framebuffer stays where
+/// the engine put it (usually PSRAM) and is copied out in `kBandRows`-row
+/// bands through a small internal staging buffer, as LovyanGFXDisplay does.
+/// A panel with PREFER_EXTERNAL_RAM gets the engine's rows directly.
 class TactilityDisplay : public Deki::IDisplay
 {
 public:
@@ -59,10 +50,9 @@ public:
     void RequestFullRefresh() override;
     bool ProcessEvents() override;
 
-    // Overlay support: not implemented. Nothing in any Deki package calls these
-    // today (only EditorDisplay and the rendering tests do), and the non-ESP32
-    // branch of LovyanGFXDisplay stubs them the same way. Implement them here
-    // the day a UI system actually composites through the display.
+    // Overlays are stubs, as in LovyanGFXDisplay's non-ESP32 branch: no Deki
+    // package calls them (only EditorDisplay and the rendering tests do).
+    // Implement them when a UI system composites through the display.
     void* CreateUIOverlay(int32_t width, int32_t height) override;
     bool UpdateUIOverlay(void* overlay, int32_t x, int32_t y, int32_t width, int32_t height,
                          const uint32_t* pixels) override;
@@ -78,21 +68,23 @@ public:
     Deki::ColorFormat GetPanelFormat() const { return m_PanelFormat; }
 
 private:
-    /// Push one half-open rectangle of the framebuffer to the panel.
+    /// Pushes one half-open rectangle of the framebuffer to the panel.
     void PushRect(const uint8_t* framebuffer, int fbWidth, Deki::ColorFormat format, int32_t x0, int32_t y0, int32_t x1,
                   int32_t y1);
 
-    /// Rows staged per draw_bitmap call. 8 matches LovyanGFXDisplay; it keeps
-    /// the staging buffer small (320 px * 8 rows * 2 B = 5 KB) while still
-    /// amortising the per-call overhead of the driver.
+    /// Rows staged per draw_bitmap call. 8, as in LovyanGFXDisplay, keeps the
+    /// staging buffer small (320 px * 8 rows * 2 B = 5 KB) while spreading the
+    /// driver's per-call cost.
     static constexpr int32_t kBandRows = 8;
 
     struct Device* m_Device = nullptr;
     bool m_Initialized = false;
     bool m_StoppedLvgl = false;
-    /// Panel promises not to DMA from our pointer, so staging can be skipped.
+    /// The panel promises not to DMA from the given pointer, so staging can be
+    /// skipped.
     bool m_CanDrawFromExternalRam = false;
-    /// Panel wants the other byte order, so every pixel is swapped while staging.
+    /// The panel wants the other byte order, so every pixel is swapped while
+    /// staging.
     bool m_NeedsByteSwap = false;
 
     int32_t m_DisplayWidth = 0;

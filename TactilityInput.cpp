@@ -22,8 +22,8 @@ uint32_t TactilityInput::TranslateCodePoint(uint32_t codepoint)
 #if defined(DEKI_TACTILITY_TARGET)
     switch (codepoint)
     {
-        // Enter, escape and backspace already agree: Tactility spells them as
-        // the C0 control codes, which is exactly what Deki's ids are.
+        // Enter, escape and backspace already agree: Tactility uses the C0
+        // control codes, which are Deki's ids.
         case CODEPOINT_ENTER: return Keys::kEnter;
         case CODEPOINT_ESCAPE: return Keys::kEsc;
         case CODEPOINT_BACKSPACE: return Keys::kBackspace;
@@ -101,8 +101,8 @@ bool TactilityInput::Initialize()
     }
 
     // Both devices are optional. A board may have touch and no keyboard (most
-    // panels), or a keyboard and no touch (Cardputer); only having neither is
-    // a failure, since then this backend can produce nothing.
+    // panels) or a keyboard and no touch (Cardputer); only having neither is a
+    // failure.
     if (device_get_first_active_by_type(&POINTER_TYPE, &m_Pointer) != ERROR_NONE)
     {
         m_Pointer = nullptr;
@@ -205,8 +205,8 @@ void TactilityInput::PollPointer()
     }
 
     // read_data() refreshes the controller's cached state; get_touched_points()
-    // then reports it. Tactility gives us the CURRENT points, not events, so
-    // the down/move/up transitions are ours to synthesise.
+    // then reports it. Tactility gives the current points, not events, so the
+    // down/move/up transitions are made here.
     pointer_read_data(m_Pointer, 0);
 
     uint16_t xs[1] = {};
@@ -303,8 +303,8 @@ void TactilityInput::PollKeyboard()
             }
         }
 
-        // The driver sets this when more key data is already queued. Without
-        // draining, a fast typist's keystrokes arrive one per frame.
+        // The driver sets this when more key data is queued. Read it all, or
+        // fast typing arrives one key per frame.
         if (!data.continue_reading)
         {
             break;

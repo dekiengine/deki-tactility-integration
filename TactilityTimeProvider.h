@@ -4,8 +4,8 @@
 
 #include <cstdint>
 
-// Tactility's own clock: FreeRTOS ticks, 1 kHz on every Tactility target
-// (the simulator's FreeRTOSConfig.h insists it matches the ESP32). Delaying
+// Tactility's own clock: FreeRTOS ticks, 1 kHz on every Tactility target (the
+// simulator's FreeRTOSConfig.h requires it to match the ESP32). Delaying
 // through it yields the task, so the OS keeps running while a frame waits.
 #if defined(DEKI_TACTILITY_TARGET)
 #include <tactility/delay.h>
@@ -22,7 +22,7 @@ public:
     uint32_t GetTicksMs() const override { return static_cast<uint32_t>(get_millis()); }
     void DelayMs(uint32_t ms) const override { delay_millis(ms); }
 #else
-    // Inert off-target, so the editor can still compile the package.
+    // Does nothing off-target, so the editor can still compile the package.
     uint32_t GetTicksMs() const override { return 0; }
     void DelayMs(uint32_t) const override {}
 #endif
