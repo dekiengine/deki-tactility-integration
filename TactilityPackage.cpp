@@ -16,9 +16,9 @@
 #include <deki/reflection/ComponentFactory.h>
 #include <deki/reflection/ComponentRegistry.h>
 
-extern void DekiTactility_RegisterComponents();
-extern int DekiTactility_GetAutoComponentCount();
-extern const Deki::ComponentMeta* DekiTactility_GetAutoComponentMeta(int index);
+extern void DekiTactilityRegisterComponents();
+extern int DekiTactilityGetAutoComponentCount();
+extern const Deki::ComponentMeta* DekiTactilityGetAutoComponentMeta(int index);
 
 namespace DekiTactility
 {
@@ -38,29 +38,29 @@ extern "C"
     /**
      * @brief Ensure the deki-tactility package's components are registered
      */
-    DEKI_TACTILITY_API int DekiTactility_EnsureRegistered(void)
+    DEKI_TACTILITY_API int DekiTactilityEnsureRegistered(void)
     {
         if (s_TactilityRegistered)
         {
-            return ::DekiTactility_GetAutoComponentCount();
+            return ::DekiTactilityGetAutoComponentCount();
         }
         s_TactilityRegistered = true;
 
-        ::DekiTactility_RegisterComponents();
+        ::DekiTactilityRegisterComponents();
 
-        return ::DekiTactility_GetAutoComponentCount();
+        return ::DekiTactilityGetAutoComponentCount();
     }
 
     // =============================================================================
     // Plugin metadata (for dynamic loading compatibility)
     // =============================================================================
 
-    DEKI_PLUGIN_API const char* DekiPlugin_GetName(void)
+    DEKI_PLUGIN_API const char* DekiPluginGetName(void)
     {
         return "Deki Tactility Package";
     }
 
-    DEKI_PLUGIN_API const char* DekiPlugin_GetVersion(void)
+    DEKI_PLUGIN_API const char* DekiPluginGetVersion(void)
     {
 #ifdef DEKI_PACKAGE_VERSION
         return DEKI_PACKAGE_VERSION;
@@ -69,32 +69,32 @@ extern "C"
 #endif
     }
 
-    DEKI_PLUGIN_API int DekiPlugin_Init(void)
+    DEKI_PLUGIN_API int DekiPluginInit(void)
     {
         return 0;
     }
 
-    DEKI_PLUGIN_API void DekiPlugin_Shutdown(void)
+    DEKI_PLUGIN_API void DekiPluginShutdown(void)
     {
         s_TactilityRegistered = false;
     }
 
-    DEKI_PLUGIN_API int DekiPlugin_GetComponentCount(void)
+    DEKI_PLUGIN_API int DekiPluginGetComponentCount(void)
     {
-        return ::DekiTactility_GetAutoComponentCount();
+        return ::DekiTactilityGetAutoComponentCount();
     }
 
-    DEKI_PLUGIN_API const Deki::ComponentMeta* DekiPlugin_GetComponentMeta(int index)
+    DEKI_PLUGIN_API const Deki::ComponentMeta* DekiPluginGetComponentMeta(int index)
     {
-        return ::DekiTactility_GetAutoComponentMeta(index);
+        return ::DekiTactilityGetAutoComponentMeta(index);
     }
 
-    DEKI_PLUGIN_API void DekiPlugin_RegisterComponents(void)
+    DEKI_PLUGIN_API void DekiPluginRegisterComponents(void)
     {
-        DekiTactility_EnsureRegistered();
+        DekiTactilityEnsureRegistered();
     }
 
-    DEKI_TACTILITY_API const char* DekiTactility_GetName(void)
+    DEKI_TACTILITY_API const char* DekiTactilityGetName(void)
     {
         return "Tactility";
     }
@@ -104,8 +104,8 @@ extern "C"
 #else  // !DEKI_EDITOR — runtime
 
 // Component registration happens through the auto-generated
-// ::DekiTactility_RegisterComponents(), called by
-// deki_register_project_packages(). Display, input and the filesystem come up
+// ::DekiTactilityRegisterComponents(), called by
+// DekiRegisterProjectPackages(). Display, input and the filesystem come up
 // as boot SetupComponents.
 
 }  // namespace DekiTactility

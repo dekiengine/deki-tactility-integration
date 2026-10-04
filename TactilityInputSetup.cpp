@@ -6,7 +6,7 @@
 #include <memory>
 
 #include "DekiInput.h"      // from deki-input
-#include "DekiInputInit.h"  // DekiInput_InitSystem (from deki-input)
+#include "DekiInputInit.h"  // DekiInputInitSystem (from deki-input)
 #include "TactilityInput.h"
 #endif
 
@@ -34,7 +34,7 @@ void TactilityInputSetup::Setup(SetupCallback onComplete)
     // Create and register the dispatch system. Global scope, not
     // DekiTactility::, because the editor's generated glue declares it that
     // way. Idempotent.
-    DekiInput_InitSystem();
+    DekiInputInitSystem();
 
     DEKI_LOG_INFO("TactilityInputSetup: input ready");
     onComplete(true);

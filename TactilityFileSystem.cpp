@@ -24,10 +24,10 @@ const char* ModeToStdio(Deki::IFileSystem::OpenMode mode)
 {
     switch (mode)
     {
-        case Deki::IFileSystem::OpenMode::READ_BINARY: return "rb";
-        case Deki::IFileSystem::OpenMode::WRITE_BINARY: return "wb";
-        case Deki::IFileSystem::OpenMode::READ_TEXT: return "r";
-        case Deki::IFileSystem::OpenMode::WRITE_TEXT: return "w";
+        case Deki::IFileSystem::OpenMode::ReadBinary: return "rb";
+        case Deki::IFileSystem::OpenMode::WriteBinary: return "wb";
+        case Deki::IFileSystem::OpenMode::ReadText: return "r";
+        case Deki::IFileSystem::OpenMode::WriteText: return "w";
     }
     return "rb";
 }
@@ -36,9 +36,9 @@ int OriginToStdio(Deki::IFileSystem::SeekOrigin origin)
 {
     switch (origin)
     {
-        case Deki::IFileSystem::SeekOrigin::BEGIN: return SEEK_SET;
-        case Deki::IFileSystem::SeekOrigin::CURRENT: return SEEK_CUR;
-        case Deki::IFileSystem::SeekOrigin::END: return SEEK_END;
+        case Deki::IFileSystem::SeekOrigin::Begin: return SEEK_SET;
+        case Deki::IFileSystem::SeekOrigin::Current: return SEEK_CUR;
+        case Deki::IFileSystem::SeekOrigin::End: return SEEK_END;
     }
     return SEEK_SET;
 }

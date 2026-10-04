@@ -170,20 +170,20 @@ void TactilityInput::Track(const DekiInput::InputEvent& event)
 {
     switch (event.type)
     {
-        case DekiInput::InputEventType::MOUSE_BUTTON_DOWN:
-        case DekiInput::InputEventType::MOUSE_MOVE:
-            m_Touched = (event.type == DekiInput::InputEventType::MOUSE_BUTTON_DOWN) || m_Touched;
+        case DekiInput::InputEventType::MouseButtonDown:
+        case DekiInput::InputEventType::MouseMove:
+            m_Touched = (event.type == DekiInput::InputEventType::MouseButtonDown) || m_Touched;
             m_TouchX = event.x;
             m_TouchY = event.y;
             break;
-        case DekiInput::InputEventType::MOUSE_BUTTON_UP: m_Touched = false; break;
-        case DekiInput::InputEventType::KEY_DOWN:
+        case DekiInput::InputEventType::MouseButtonUp: m_Touched = false; break;
+        case DekiInput::InputEventType::KeyDown:
             if (!IsKeyPressed(event.key) && m_HeldKeyCount < kMaxHeldKeys)
             {
                 m_HeldKeys[m_HeldKeyCount++] = event.key;
             }
             break;
-        case DekiInput::InputEventType::KEY_UP:
+        case DekiInput::InputEventType::KeyUp:
             for (int i = 0; i < m_HeldKeyCount; ++i)
             {
                 if (m_HeldKeys[i] == event.key)
@@ -231,7 +231,7 @@ void TactilityInput::PollPointer()
             m_Touched = true;
             m_TouchX = x;
             m_TouchY = y;
-            event.type = DekiInput::InputEventType::MOUSE_BUTTON_DOWN;
+            event.type = DekiInput::InputEventType::MouseButtonDown;
             event.x = x;
             event.y = y;
             event.pressed = true;
@@ -241,7 +241,7 @@ void TactilityInput::PollPointer()
         {
             m_TouchX = x;
             m_TouchY = y;
-            event.type = DekiInput::InputEventType::MOUSE_MOVE;
+            event.type = DekiInput::InputEventType::MouseMove;
             event.x = x;
             event.y = y;
             Emit(event);
@@ -250,7 +250,7 @@ void TactilityInput::PollPointer()
     else if (m_Touched)
     {
         m_Touched = false;
-        event.type = DekiInput::InputEventType::MOUSE_BUTTON_UP;
+        event.type = DekiInput::InputEventType::MouseButtonUp;
         event.x = m_TouchX;
         event.y = m_TouchY;
         event.pressed = false;
@@ -277,7 +277,7 @@ void TactilityInput::PollKeyboard()
         if (key != 0)
         {
             DekiInput::InputEvent event = {};
-            event.type = data.pressed ? DekiInput::InputEventType::KEY_DOWN : DekiInput::InputEventType::KEY_UP;
+            event.type = data.pressed ? DekiInput::InputEventType::KeyDown : DekiInput::InputEventType::KeyUp;
             event.key = key;
             event.pressed = data.pressed;
             event.timestamp = Deki::Time::GetTime();

@@ -249,12 +249,12 @@ void TactilityWindowDisplay::HandleCanvasEvent(void* eventObject)
         if (code == LV_EVENT_PRESSED)
         {
             m_PointerDown = true;
-            out.type = DekiInput::InputEventType::MOUSE_BUTTON_DOWN;
+            out.type = DekiInput::InputEventType::MouseButtonDown;
             out.pressed = true;
         }
         else if (code == LV_EVENT_PRESSING)
         {
-            out.type = DekiInput::InputEventType::MOUSE_MOVE;
+            out.type = DekiInput::InputEventType::MouseMove;
         }
         else
         {
@@ -263,7 +263,7 @@ void TactilityWindowDisplay::HandleCanvasEvent(void* eventObject)
                 return;
             }
             m_PointerDown = false;
-            out.type = DekiInput::InputEventType::MOUSE_BUTTON_UP;
+            out.type = DekiInput::InputEventType::MouseButtonUp;
         }
         Queue(out);
     }
@@ -277,10 +277,10 @@ void TactilityWindowDisplay::HandleCanvasEvent(void* eventObject)
         // LVGL reports a key once, as it goes down (again on repeat), and
         // never as it comes up.
         out.key = key;
-        out.type = DekiInput::InputEventType::KEY_DOWN;
+        out.type = DekiInput::InputEventType::KeyDown;
         out.pressed = true;
         Queue(out);
-        out.type = DekiInput::InputEventType::KEY_UP;
+        out.type = DekiInput::InputEventType::KeyUp;
         out.pressed = false;
         Queue(out);
     }

@@ -810,7 +810,7 @@ private:
           << "    endforeach()\n"
           << "endif()\n\n";
 
-        // deki_register_project_packages(): the static package registration a
+        // DekiRegisterProjectPackages(): the static package registration a
         // firmware build uses. The engine links its own empty system-init
         // stub here, as in the desktop simulator, so the init calls go inline.
         const std::string initName =
@@ -1064,32 +1064,32 @@ private:
 
 extern "C"
 {
-    DEKI_BUILDER_API const DekiBuilderAbi* DekiBuilder_GetAbi(void)
+    DEKI_BUILDER_API const DekiBuilderAbi* DekiBuilderGetAbi(void)
     {
-        static const DekiBuilderAbi abi = DekiBuilder_ThisAbi((uint32_t)sizeof(DekiEditor::PlatformConfig),
+        static const DekiBuilderAbi kAbi = DekiBuilderThisAbi((uint32_t)sizeof(DekiEditor::PlatformConfig),
                                                               (uint32_t)sizeof(DekiEditor::CMakeGen::PackageEntry));
-        return &abi;
+        return &kAbi;
     }
 
-    DEKI_BUILDER_API const char* DekiBuilder_GetName(void)
+    DEKI_BUILDER_API const char* DekiBuilderGetName(void)
     {
         return "Deki Tactility Builder";
     }
-    DEKI_BUILDER_API const char* DekiBuilder_GetVersion(void)
+    DEKI_BUILDER_API const char* DekiBuilderGetVersion(void)
     {
         return "0.2.0";
     }
-    DEKI_BUILDER_API int DekiBuilder_GetBuilderCount(void)
+    DEKI_BUILDER_API int DekiBuilderGetBuilderCount(void)
     {
         return 1;
     }
 
-    DEKI_BUILDER_API DekiEditor::ITargetBuilder* DekiBuilder_CreateBuilder(int index)
+    DEKI_BUILDER_API DekiEditor::ITargetBuilder* DekiBuilderCreateBuilder(int index)
     {
         return index == 0 ? new DekiEditor::TactilityBuilder() : nullptr;
     }
 
-    DEKI_BUILDER_API void DekiBuilder_DestroyBuilder(DekiEditor::ITargetBuilder* builder)
+    DEKI_BUILDER_API void DekiBuilderDestroyBuilder(DekiEditor::ITargetBuilder* builder)
     {
         delete builder;  // in THIS module: its vtable and operator delete live here
     }
