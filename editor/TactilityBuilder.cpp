@@ -88,7 +88,9 @@ std::string Join(const std::vector<std::string>& v, const char* sep)
 {
     std::string out;
     for (const auto& s : v)
+    {
         out += (out.empty() ? "" : sep) + s;
+    }
     return out;
 }
 
@@ -123,7 +125,9 @@ bool IsAlnum(char c)
 bool IsValidAppId(const std::string& id)
 {
     if (id.size() < 5 || id.size() > 31)
+    {
         return false;
+    }
     return std::all_of(id.begin(), id.end(), [](char c) { return IsAlnum(c) || c == '.'; });
 }
 
@@ -131,7 +135,9 @@ bool IsValidAppId(const std::string& id)
 bool IsValidAppName(const std::string& name)
 {
     if (name.size() < 2 || name.size() > 31)
+    {
         return false;
+    }
     return std::all_of(name.begin(), name.end(), [](char c) { return IsAlnum(c) || c == ' ' || c == '-'; });
 }
 
@@ -139,7 +145,9 @@ bool IsValidAppName(const std::string& name)
 bool IsValidVersionName(const std::string& version)
 {
     if (version.empty() || version.size() > 16)
+    {
         return false;
+    }
     return std::all_of(version.begin(), version.end(),
                        [](char c) { return IsAlnum(c) || c == '.' || c == '-' || c == '_'; });
 }
@@ -150,7 +158,9 @@ std::string AppNameFor(const std::string& projectPath, const PlatformConfig& con
 {
     const std::string explicitName = config.Option("appName");
     if (!explicitName.empty())
+    {
         return explicitName;
+    }
     std::ifstream in(fs::path(projectPath) / "deki.json");
     const nlohmann::json j = nlohmann::json::parse(in, nullptr, /*allow_exceptions=*/false);
     return j.is_object() ? j.value("name", std::string()) : std::string();
@@ -158,16 +168,19 @@ std::string AppNameFor(const std::string& projectPath, const PlatformConfig& con
 
 class TactilityBuilder : public FirmwareBuilderBase
 {
-   public:
+public:
     TactilityBuilder()
     {
         BuilderDefinition def;
         std::string error;
         if (ParseBuilderDefinition(kTactilityToolchainDefinition, def, error))
+        {
             m_ToolchainMgr.Initialize(def);
+        }
         else
-            DEKI_LOG_ERROR("Tactility backend: its own toolchain definition does not parse (%s)",
-                           error.c_str());
+        {
+            DEKI_LOG_ERROR("Tactility backend: its own toolchain definition does not parse (%s)", error.c_str());
+        }
     }
 
     ~TactilityBuilder() override
@@ -175,9 +188,13 @@ class TactilityBuilder : public FirmwareBuilderBase
         m_CancelRequested = true;
         m_SdkCancel = true;
         if (m_BuildThread.joinable())
+        {
             m_BuildThread.join();
+        }
         if (m_SdkThread.joinable())
+        {
             m_SdkThread.join();
+        }
     }
 
     const char* GetName() const override { return "Tactility App"; }
@@ -206,41 +223,57 @@ class TactilityBuilder : public FirmwareBuilderBase
         {
             const std::string host = HostSimulatorPlatform();
             if (!TactilitySdk::IsPosix(sim))
+            {
                 problems.push_back("tactilityPlatform '" + sim + "' is not a simulator platform (posix-<arch>)");
+            }
             else if (host.empty())
+            {
                 problems.push_back("the Tactility simulator runs on x86-64 Linux only; build this platform with "
                                    "the editor on Linux (WSL works)");
+            }
             else if (sim != host)
+            {
                 problems.push_back("tactilityPlatform '" + sim + "' does not match this machine, which runs " + host);
+            }
         }
         else
         {
             const auto& ok = ExecutableFromPsramTargets();
             if (std::find(ok.begin(), ok.end(), chip) == ok.end())
-                problems.push_back(
-                    "idfTarget '" + chip +
-                    "' cannot run a Deki app: an external app's code is relocated into RAM at "
-                    "load, and only " + Join(ok, " and ") +
-                    " can execute it from PSRAM. Tactility supports other chips, but an engine "
-                    "does not fit in their internal RAM.");
+            {
+                problems.push_back("idfTarget '" + chip +
+                                   "' cannot run a Deki app: an external app's code is relocated into RAM at "
+                                   "load, and only " +
+                                   Join(ok, " and ") +
+                                   " can execute it from PSRAM. Tactility supports other chips, but an engine "
+                                   "does not fit in their internal RAM.");
+            }
         }
 
         const std::string appId = config.Option("appId");
         if (appId.empty())
+        {
             problems.push_back("appId is not set; Tactility keys an app's assets and user data "
                                "off it (e.g. 'com.example.mygame')");
+        }
         else if (!IsValidAppId(appId))
+        {
             problems.push_back("appId '" + appId + "' is not a Tactility app id: 5 to 31 letters, digits and '.'");
+        }
 
         const std::string appName = config.Option("appName");
         if (!appName.empty() && !IsValidAppName(appName))
+        {
             problems.push_back("appName '" + appName +
                                "' is not a Tactility app name: 2 to 31 letters, digits, spaces and '-'");
+        }
 
         const std::string version = config.Option("appVersion", "0.1.0");
         if (!IsValidVersionName(version))
+        {
             problems.push_back("appVersion '" + version +
                                "' is not a Tactility version name: up to 16 letters, digits, '.', '-' and '_'");
+        }
 
         return problems;
     }
@@ -260,12 +293,14 @@ class TactilityBuilder : public FirmwareBuilderBase
     std::vector<DeployTarget> EnumerateDeployTargets() const override
     {
         if (!IsSimulator())
+        {
             return {};
+        }
         return { DeployTarget{ "localhost", "Tactility simulator on this machine" } };
     }
 
-    void Deploy(const std::string& projectPath, const std::string& deployTargetId,
-                BuildOutputCallback out, BuildProgressCallback progress) override
+    void Deploy(const std::string& projectPath, const std::string& deployTargetId, BuildOutputCallback out,
+                BuildProgressCallback progress) override
     {
         const std::string host = deployTargetId.empty() ? std::string("localhost") : deployTargetId;
         RunOnBuildThread([this, projectPath, host, out, progress]() { DoDeploy(projectPath, host, out, progress); });
@@ -344,7 +379,9 @@ class TactilityBuilder : public FirmwareBuilderBase
         }
 
         if (TactilitySdk::IsPosix(platform))
+        {
             return GenerateSimulatorComponent(projectPath, root, config, packageDefines);
+        }
 
         // A device app: the ESP-IDF component that would compile the game is
         // not written yet, so this compiles nothing of it (see Build()).
@@ -382,9 +419,13 @@ class TactilityBuilder : public FirmwareBuilderBase
     {
         const std::string platform = Platform();
         if (platform.empty())
+        {
             return false;
+        }
         if (TactilitySdk::IsPosix(platform))
+        {
             return TactilitySdk::IsBuilt(platform);
+        }
         return IdfReady() && TactilitySdk::IsBuilt(platform);
     }
 
@@ -392,15 +433,21 @@ class TactilityBuilder : public FirmwareBuilderBase
     {
         const std::string platform = Platform();
         if (platform.empty())
+        {
             return "The platform names no Tactility target (idfTarget or tactilityPlatform)";
+        }
         const bool posix = TactilitySdk::IsPosix(platform);
         if (!posix && !IdfReady())
+        {
             return "ESP-IDF 6.1 is not installed; install the ESP-IDF SDK component";
+        }
         if (!TactilitySdk::IsBuilt(platform))
+        {
             return "The TactilitySDK " + std::string(TactilityPin::kVersion) + " for " + platform +
                    " has not been built; install the TactilitySDK component";
-        return (posix ? std::string() : std::string("ESP-IDF 6.1 and ")) + "TactilitySDK " +
-               TactilityPin::kVersion + " for " + platform + " " + (posix ? "is" : "are") + " installed";
+        }
+        return (posix ? std::string() : std::string("ESP-IDF 6.1 and ")) + "TactilitySDK " + TactilityPin::kVersion +
+               " for " + platform + " " + (posix ? "is" : "are") + " installed";
     }
 
     std::vector<ToolchainComponent> GetToolchainComponents() const override
@@ -408,24 +455,30 @@ class TactilityBuilder : public FirmwareBuilderBase
         const std::string platform = Platform();
         std::vector<ToolchainComponent> components;
         if (!TactilitySdk::IsPosix(platform))
+        {
             components = m_ToolchainMgr.GetComponents();
+        }
 
         ToolchainComponent sdk;
         sdk.id = "tactility-sdk";
         sdk.displayName = "TactilitySDK (" + platform + ")";
         sdk.canInstall = true;
         sdk.canSetup = false;
-        sdk.latestVersion = std::string(TactilityPin::kVersion) + " @ " +
-                            std::string(TactilityPin::kCommit).substr(0, 12);
+        sdk.latestVersion =
+            std::string(TactilityPin::kVersion) + " @ " + std::string(TactilityPin::kCommit).substr(0, 12);
         if (m_SdkBusy)
+        {
             sdk.status = ToolchainComponentStatus::Installing;
+        }
         else if (TactilitySdk::IsBuilt(platform))
         {
             sdk.status = ToolchainComponentStatus::Installed;
             sdk.installedVersion = sdk.latestVersion;
         }
         else
+        {
             sdk.status = ToolchainComponentStatus::NotInstalled;
+        }
         sdk.tooltip = TactilitySdk::IsPosix(platform)
                           ? "The Tactility simulator, built from Tactility's sources at the pinned commit and "
                             "packaged as an SDK, plus TactilityTool's app build tool. Takes a while."
@@ -456,14 +509,22 @@ class TactilityBuilder : public FirmwareBuilderBase
         };
         const std::string platform = Platform();
         if (platform.empty())
+        {
             return fail("The platform names no Tactility target (idfTarget or tactilityPlatform)");
+        }
         if (m_SdkBusy)
+        {
             return fail("The TactilitySDK is already being built");
+        }
         if (!TactilitySdk::IsPosix(platform) && !IdfReady())
+        {
             return fail("Install the ESP-IDF SDK component first: the TactilitySDK is built with it");
+        }
 
         if (m_SdkThread.joinable())
+        {
             m_SdkThread.join();
+        }
         m_SdkBusy = true;
         m_SdkCancel = false;
         const std::string idfPath = IdfPath();
@@ -501,14 +562,16 @@ class TactilityBuilder : public FirmwareBuilderBase
 
     bool IsToolchainBusy() const override { return m_ToolchainMgr.IsBusy() || m_SdkBusy; }
 
-   private:
+private:
     /// The SDK platform of the bound platform. Before any platform is bound
     /// (a toolchain listing with none selected) it describes the default
     /// device chip.
     std::string Platform() const
     {
         if (!m_HasPlatformConfig)
+        {
             return "esp32s3";
+        }
         return SdkPlatformOf(m_PlatformConfig);
     }
 
@@ -521,8 +584,12 @@ class TactilityBuilder : public FirmwareBuilderBase
     bool IdfReady() const
     {
         for (const auto& c : m_ToolchainMgr.GetComponents())
+        {
             if (c.id == "esp-idf")
+            {
                 return c.status == ToolchainComponentStatus::Installed;
+            }
+        }
         return false;
     }
 
@@ -545,14 +612,16 @@ class TactilityBuilder : public FirmwareBuilderBase
         const auto allPackages = CMakeGen::ScanPackageManifests(projectPath);
         const auto activeIds = CMakeGen::ResolveActivePackages(allPackages, packageDefines, config.Capabilities());
         std::string transformWhy;
-        const CMakeGen::TransformWidth transformWidth = CMakeGen::ResolveProjectTransformWidth(
-            allPackages, CMakeGen::ReadProjectTags(projectPath), &transformWhy);
+        const CMakeGen::TransformWidth transformWidth =
+            CMakeGen::ResolveProjectTransformWidth(allPackages, CMakeGen::ReadProjectTags(projectPath), &transformWhy);
         const std::vector<std::string> transformDefines = CMakeGen::TransformDefines(transformWidth);
 
         const StripPlan strip = ComputeStripPlan(projectPath, config.id);
         std::string stripSourceRegex;
         for (const auto& rx : strip.SourceExcludeRegexes())
+        {
             stripSourceRegex += (stripSourceRegex.empty() ? "" : "|") + rx;
+        }
 
         // Everything the game's code is compiled with, and generated under.
         // The engine is told its target the way every backend tells it: the
@@ -560,15 +629,25 @@ class TactilityBuilder : public FirmwareBuilderBase
         // (DEKI_FAST_ATTR empty, below).
         std::vector<std::string> defines = { "DEKI_TACTILITY_TARGET" };
         for (const auto& d : transformDefines)
+        {
             defines.push_back(d);
+        }
         for (const auto& d : config.defines)
+        {
             defines.push_back(d);
+        }
         for (const auto& d : packageDefines)
+        {
             defines.push_back(d);
+        }
         if (m_BuildOptions.enableLogging)
+        {
             defines.push_back("DEKI_LOG_ENABLED");
+        }
         if (m_BuildOptions.enableInternalLogging)
+        {
             defines.push_back("DEKI_LOG_INTERNAL_ENABLED");
+        }
 
         std::ostringstream f;
         f << "# Generated by the Deki Tactility builder. Do not edit.\n"
@@ -607,7 +686,9 @@ class TactilityBuilder : public FirmwareBuilderBase
           << "    \"DEKI_ENABLE_TRANSPARENCY=true\"\n"
           << "    \"DEKI_FAST_ATTR=\"";
         if (m_BuildOptions.enableLogging)
+        {
             f << "\n    DEKI_LOG_ENABLED";
+        }
         f << ")\n\n";
 
         // The game's own sources. PluginExports.cpp is the editor DLL's glue.
@@ -632,7 +713,9 @@ class TactilityBuilder : public FirmwareBuilderBase
 
         f << "set(_DEKI_ACTIVE_PACKAGES";
         for (const auto& id : activeIds)
+        {
             f << " \"" << CMakeGen::EscapeCMakeString(id) << "\"";
+        }
         f << ")\n";
 
         f << "file(GLOB PACKAGE_CMAKE_FILES \"${DEKI_PROJECT_ROOT}/packages/*/package.cmake\")\n"
@@ -708,15 +791,19 @@ class TactilityBuilder : public FirmwareBuilderBase
             {
                 f << "        EXCLUDE_REGEX";
                 for (const auto& rx : codegenExcludes)
+                {
                     f << " \"" << CMakeGen::EscapeCMakeString(rx) << "\"";
+                }
                 f << "\n";
             }
         }
         f << "        DEFINES";
         for (const auto& d : defines)
+        {
             f << " \"" << CMakeGen::EscapeCMakeString(d) << "\"";
-        f << " \"DEKI_FAST_ATTR=\" \"DEKI_SCREEN_WIDTH=" << config.screenWidth << "\" \"DEKI_SCREEN_HEIGHT="
-          << config.screenHeight << "\")\n"
+        }
+        f << " \"DEKI_FAST_ATTR=\" \"DEKI_SCREEN_WIDTH=" << config.screenWidth
+          << "\" \"DEKI_SCREEN_HEIGHT=" << config.screenHeight << "\")\n"
           << "    foreach(_OUTDIR ${_RC_PKG_OUTDIRS})\n"
           << "        file(GLOB _RC_GEN_SRCS \"${_OUTDIR}/*.gen.cpp\")\n"
           << "        list(APPEND _ALL_PACKAGE_SOURCES ${_RC_GEN_SRCS})\n"
@@ -726,12 +813,12 @@ class TactilityBuilder : public FirmwareBuilderBase
         // deki_register_project_packages(): the static package registration a
         // firmware build uses. The engine links its own empty system-init
         // stub here, as in the desktop simulator, so the init calls go inline.
-        const std::string initName = fs::path(CMakeGen::GeneratePackageInitFile(
-                                                  root / "main", allPackages, activeIds,
-                                                  fs::path(GetSourceDirectory(projectPath)),
-                                                  /*engineDefinesSystemInit=*/true))
-                                         .filename()
-                                         .string();
+        const std::string initName =
+            fs::path(CMakeGen::GeneratePackageInitFile(root / "main", allPackages, activeIds,
+                                                       fs::path(GetSourceDirectory(projectPath)),
+                                                       /*engineDefinesSystemInit=*/true))
+                .filename()
+                .string();
 
         f << "tactility_component_register(SRCS\n"
           << "    \"${DEKI_ENGINE_PATH}/entry/Main.cpp\"\n"
@@ -762,15 +849,21 @@ class TactilityBuilder : public FirmwareBuilderBase
           << "    \"" << CMakeGen::EscapeCMakeString("DEKI_TACTILITY_APP_ID=\"" + config.Option("appId") + "\"")
           << "\"\n";
         for (const auto& d : defines)
+        {
             f << "    \"" << CMakeGen::EscapeCMakeString(d) << "\"\n";
+        }
         f << "    ${PACKAGE_DEFINES})\n\n";
 
         if (!config.cxxFlags.empty())
         {
             f << "target_compile_options(${PROJECT_NAME} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:";
             for (const auto& flag : config.cxxFlags)
+            {
                 if (flag.rfind("-std=", 0) != 0)
+                {
                     f << " " << flag;
+                }
+            }
             f << ">)\n";
         }
 
@@ -788,7 +881,9 @@ class TactilityBuilder : public FirmwareBuilderBase
     void Report(const BuildOutputCallback& out, const std::string& line, bool isError)
     {
         if (out)
+        {
             out(line, isError);
+        }
     }
 
     void Fail(const BuildOutputCallback& out, const BuildProgressCallback& progress, const std::string& error)
@@ -796,7 +891,9 @@ class TactilityBuilder : public FirmwareBuilderBase
         Report(out, error, true);
         SetError(error);
         if (progress)
+        {
             progress(GetProgress());
+        }
     }
 
     // tactility.py, the pinned copy, run in the app directory with the SDK
@@ -820,7 +917,9 @@ class TactilityBuilder : public FirmwareBuilderBase
     {
         SetProgress(BuildState::Building, "Building the Tactility app", 0.0f);
         if (progress)
+        {
             progress(GetProgress());
+        }
 
         const std::string platform = SdkPlatformOf(m_PlatformConfig);
         if (!TactilitySdk::IsPosix(platform))
@@ -843,24 +942,42 @@ class TactilityBuilder : public FirmwareBuilderBase
         // generated.
         if (!fs::is_regular_file(assets / "project_data.bin", ec) ||
             !fs::is_regular_file(assets / "assets" / "asset_table.bin", ec))
-            return Fail(out, progress, "No boot payload and assets in " + assets.string() + "; build through the editor");
+        {
+            return Fail(out, progress,
+                        "No boot payload and assets in " + assets.string() + "; build through the editor");
+        }
 
-        const int code = RunShellCommand(ToolCommand(root, "build -a " + platform + " --local-sdk"), root.string(),
-                                         [&out](const std::string& line) { if (out) out(line, false); },
-                                         &m_CancelRequested);
+        const int code = RunShellCommand(
+            ToolCommand(root, "build -a " + platform + " --local-sdk"), root.string(),
+            [&out](const std::string& line)
+            {
+                if (out)
+                {
+                    out(line, false);
+                }
+            },
+            &m_CancelRequested);
         if (m_CancelRequested)
+        {
             return Fail(out, progress, "Cancelled");
+        }
         if (code != 0)
+        {
             return Fail(out, progress, "tactility.py build failed (exit code " + std::to_string(code) + ")");
+        }
 
         const fs::path app = root / "build" / (m_PlatformConfig.Option("appId") + ".app");
         if (!fs::is_regular_file(app, ec))
+        {
             return Fail(out, progress, "tactility.py finished but " + app.string() + " is missing");
+        }
 
         Report(out, "Built " + app.string(), false);
         SetProgress(BuildState::Completed, "Built " + app.filename().string(), 1.0f);
         if (progress)
+        {
             progress(GetProgress());
+        }
 #endif
     }
 
@@ -869,12 +986,16 @@ class TactilityBuilder : public FirmwareBuilderBase
     {
         SetProgress(BuildState::Deploying, "Installing on " + host, 0.0f);
         if (progress)
+        {
             progress(GetProgress());
+        }
 
         const fs::path root = GetBuildDirectory(projectPath);
         std::error_code ec;
         if (!fs::is_regular_file(root / "build" / (m_PlatformConfig.Option("appId") + ".app"), ec))
+        {
             return Fail(out, progress, "Nothing to install: build the app first");
+        }
 
         // A simulator on this machine is started at the platform's screen size
         // if none is running; one that is running is used as it is.
@@ -882,9 +1003,18 @@ class TactilityBuilder : public FirmwareBuilderBase
         {
             const std::string error = TactilitySdk::EnsureSimulator(
                 m_PlatformConfig.screenWidth, m_PlatformConfig.screenHeight,
-                [&out](const std::string& line) { if (out) out(line, false); }, &m_CancelRequested);
+                [&out](const std::string& line)
+                {
+                    if (out)
+                    {
+                        out(line, false);
+                    }
+                },
+                &m_CancelRequested);
             if (!error.empty())
+            {
                 return Fail(out, progress, error);
+            }
         }
 
         // The device must be running, with its development service on.
@@ -893,26 +1023,35 @@ class TactilityBuilder : public FirmwareBuilderBase
         // install prints its failure mark and still exits 0. The mark
         // (print_status_error's "❌") is the tool's only failure signal here.
         bool toolFailed = false;
-        const int code = RunShellCommand(ToolCommand(root, "install --host " + host + " --local-sdk"), root.string(),
-                                         [&out, &toolFailed](const std::string& line)
-                                         {
-                                             if (line.find("\xE2\x9D\x8C") != std::string::npos)
-                                                 toolFailed = true;
-                                             if (out)
-                                                 out(line, false);
-                                         },
-                                         &m_CancelRequested);
+        const int code = RunShellCommand(
+            ToolCommand(root, "install --host " + host + " --local-sdk"), root.string(),
+            [&out, &toolFailed](const std::string& line)
+            {
+                if (line.find("\xE2\x9D\x8C") != std::string::npos)
+                {
+                    toolFailed = true;
+                }
+                if (out)
+                {
+                    out(line, false);
+                }
+            },
+            &m_CancelRequested);
         if (code != 0 || toolFailed)
+        {
             return Fail(out, progress,
                         "tactility.py install on " + host +
                             " failed; its output above, and the device's log, say why. A device that cannot be "
                             "reached is not running, or its development service is off.");
+        }
 
         const std::string name = AppNameFor(projectPath, m_PlatformConfig);
         Report(out, "Installed '" + name + "' on " + host + "; open it from the Apps menu", false);
         SetProgress(BuildState::Completed, "Installed on " + host, 1.0f);
         if (progress)
+        {
             progress(GetProgress());
+        }
     }
 
     std::thread m_SdkThread;
@@ -923,27 +1062,36 @@ class TactilityBuilder : public FirmwareBuilderBase
 }  // namespace
 }  // namespace DekiEditor
 
-extern "C" {
-
-DEKI_BUILDER_API const DekiBuilderAbi* DekiBuilder_GetAbi(void)
+extern "C"
 {
-    static const DekiBuilderAbi abi = DekiBuilder_ThisAbi((uint32_t)sizeof(DekiEditor::PlatformConfig),
-                                                           (uint32_t)sizeof(DekiEditor::CMakeGen::PackageEntry));
-    return &abi;
-}
+    DEKI_BUILDER_API const DekiBuilderAbi* DekiBuilder_GetAbi(void)
+    {
+        static const DekiBuilderAbi abi = DekiBuilder_ThisAbi((uint32_t)sizeof(DekiEditor::PlatformConfig),
+                                                              (uint32_t)sizeof(DekiEditor::CMakeGen::PackageEntry));
+        return &abi;
+    }
 
-DEKI_BUILDER_API const char* DekiBuilder_GetName(void) { return "Deki Tactility Builder"; }
-DEKI_BUILDER_API const char* DekiBuilder_GetVersion(void) { return "0.2.0"; }
-DEKI_BUILDER_API int DekiBuilder_GetBuilderCount(void) { return 1; }
+    DEKI_BUILDER_API const char* DekiBuilder_GetName(void)
+    {
+        return "Deki Tactility Builder";
+    }
+    DEKI_BUILDER_API const char* DekiBuilder_GetVersion(void)
+    {
+        return "0.2.0";
+    }
+    DEKI_BUILDER_API int DekiBuilder_GetBuilderCount(void)
+    {
+        return 1;
+    }
 
-DEKI_BUILDER_API DekiEditor::ITargetBuilder* DekiBuilder_CreateBuilder(int index)
-{
-    return index == 0 ? new DekiEditor::TactilityBuilder() : nullptr;
-}
+    DEKI_BUILDER_API DekiEditor::ITargetBuilder* DekiBuilder_CreateBuilder(int index)
+    {
+        return index == 0 ? new DekiEditor::TactilityBuilder() : nullptr;
+    }
 
-DEKI_BUILDER_API void DekiBuilder_DestroyBuilder(DekiEditor::ITargetBuilder* builder)
-{
-    delete builder;  // in THIS module: its vtable and operator delete live here
-}
+    DEKI_BUILDER_API void DekiBuilder_DestroyBuilder(DekiEditor::ITargetBuilder* builder)
+    {
+        delete builder;  // in THIS module: its vtable and operator delete live here
+    }
 
 }  // extern "C"

@@ -41,16 +41,12 @@ bool MapPanelFormat(DisplayColorFormat panel, Deki::ColorFormat* out, bool* need
     *needsByteSwap = false;
     switch (panel)
     {
-        case DISPLAY_COLOR_FORMAT_RGB565:
-            *out = Deki::ColorFormat::RGB565;
-            return true;
+        case DISPLAY_COLOR_FORMAT_RGB565: *out = Deki::ColorFormat::RGB565; return true;
         case DISPLAY_COLOR_FORMAT_RGB565_SWAPPED:
             *out = Deki::ColorFormat::RGB565;
             *needsByteSwap = true;
             return true;
-        case DISPLAY_COLOR_FORMAT_RGB888:
-            *out = Deki::ColorFormat::RGB888;
-            return true;
+        case DISPLAY_COLOR_FORMAT_RGB888: *out = Deki::ColorFormat::RGB888; return true;
         default:
             // BGR565(_SWAPPED) would need a channel swizzle, not just a byte
             // swap; MONOCHROME and GRAYSCALE8 need a different renderer.
@@ -80,7 +76,9 @@ TactilityDisplay::~TactilityDisplay()
 bool TactilityDisplay::Initialize(int32_t width, int32_t height)
 {
     if (m_Initialized)
+    {
         return true;
+    }
 
     // Acquire the panel BEFORE stopping LVGL, the order Tactility's own
     // GraphicsDemo uses: the device lookup goes through the running system.
@@ -102,8 +100,7 @@ bool TactilityDisplay::Initialize(int32_t width, int32_t height)
     bool needsByteSwap = false;
     if (!MapPanelFormat(panelFormat, &m_PanelFormat, &needsByteSwap))
     {
-        DEKI_LOG_ERROR("TactilityDisplay: panel colour format %d has no Deki equivalent",
-                       (int)panelFormat);
+        DEKI_LOG_ERROR("TactilityDisplay: panel colour format %d has no Deki equivalent", (int)panelFormat);
         Shutdown();
         return false;
     }
@@ -115,22 +112,21 @@ bool TactilityDisplay::Initialize(int32_t width, int32_t height)
     m_DisplayHeight = display_get_resolution_y(m_Device);
     if (m_DisplayWidth <= 0 || m_DisplayHeight <= 0)
     {
-        DEKI_LOG_ERROR("TactilityDisplay: panel reported a %dx%d resolution",
-                       (int)m_DisplayWidth, (int)m_DisplayHeight);
+        DEKI_LOG_ERROR("TactilityDisplay: panel reported a %dx%d resolution", (int)m_DisplayWidth,
+                       (int)m_DisplayHeight);
         Shutdown();
         return false;
     }
     // 0x0 means the caller has no expectation to check against.
     if (width > 0 && height > 0 && (width != m_DisplayWidth || height != m_DisplayHeight))
     {
-        DEKI_LOG_WARNING("TactilityDisplay: project expects %dx%d, panel is %dx%d",
-                         (int)width, (int)height, (int)m_DisplayWidth, (int)m_DisplayHeight);
+        DEKI_LOG_WARNING("TactilityDisplay: project expects %dx%d, panel is %dx%d", (int)width, (int)height,
+                         (int)m_DisplayWidth, (int)m_DisplayHeight);
     }
 
     // A panel that promises never to DMA from the caller's pointer lets us skip
     // the staging copy and hand the engine's own rows straight to the driver.
-    m_CanDrawFromExternalRam =
-        display_has_capability(m_Device, DISPLAY_CAPABILITY_PREFER_EXTERNAL_RAM);
+    m_CanDrawFromExternalRam = display_has_capability(m_Device, DISPLAY_CAPABILITY_PREFER_EXTERNAL_RAM);
 
     if (!m_CanDrawFromExternalRam || m_NeedsByteSwap)
     {
@@ -142,7 +138,8 @@ bool TactilityDisplay::Initialize(int32_t width, int32_t height)
         if (m_Band == nullptr)
         {
             DEKI_LOG_ERROR("TactilityDisplay: no room for a %zu byte staging band in DMA-capable "
-                           "internal RAM", m_BandBytes);
+                           "internal RAM",
+                           m_BandBytes);
             Shutdown();
             return false;
         }
@@ -152,9 +149,8 @@ bool TactilityDisplay::Initialize(int32_t width, int32_t height)
     display_clear(m_Device);
 
     m_Initialized = true;
-    DEKI_LOG_INFO("TactilityDisplay: %dx%d, format %d, staging=%s",
-                  (int)m_DisplayWidth, (int)m_DisplayHeight, (int)panelFormat,
-                  m_Band ? "yes" : "direct");
+    DEKI_LOG_INFO("TactilityDisplay: %dx%d, format %d, staging=%s", (int)m_DisplayWidth, (int)m_DisplayHeight,
+                  (int)panelFormat, m_Band ? "yes" : "direct");
     return true;
 }
 
@@ -172,7 +168,9 @@ void TactilityDisplay::Shutdown()
     if (m_StoppedLvgl)
     {
         if (!module_is_started(&lvgl_module))
+        {
             module_start(&lvgl_module);
+        }
         m_StoppedLvgl = false;
     }
 
@@ -185,25 +183,29 @@ void TactilityDisplay::Shutdown()
     m_Initialized = false;
 }
 
-void TactilityDisplay::Present(const uint8_t* framebuffer, int width, int height,
-                               Deki::ColorFormat format)
+void TactilityDisplay::Present(const uint8_t* framebuffer, int width, int height, Deki::ColorFormat format)
 {
     if (!m_Initialized || framebuffer == nullptr)
+    {
         return;
+    }
     PushRect(framebuffer, width, format, 0, 0, width, height);
 }
 
-void TactilityDisplay::PresentRegions(const uint8_t* framebuffer, int width, int height,
-                                      Deki::ColorFormat format, const Deki::Rect* rects,
-                                      int32_t count)
+void TactilityDisplay::PresentRegions(const uint8_t* framebuffer, int width, int height, Deki::ColorFormat format,
+                                      const Deki::Rect* rects, int32_t count)
 {
     if (!m_Initialized || framebuffer == nullptr)
+    {
         return;
+    }
 
     // count == 0 means nothing changed; an LCD holds its last frame, so there
     // is genuinely nothing to do.
     if (count == 0)
+    {
         return;
+    }
 
     if (count < 0 || rects == nullptr)
     {
@@ -215,17 +217,17 @@ void TactilityDisplay::PresentRegions(const uint8_t* framebuffer, int width, int
     // what display_draw_bitmap() wants — its end coordinates are exclusive too.
     // No conversion, and no off-by-one to get wrong.
     for (int32_t i = 0; i < count; ++i)
-        PushRect(framebuffer, width, format, rects[i].left, rects[i].top, rects[i].right,
-                 rects[i].bottom);
+    {
+        PushRect(framebuffer, width, format, rects[i].left, rects[i].top, rects[i].right, rects[i].bottom);
+    }
 }
 
-void TactilityDisplay::PushRect(const uint8_t* framebuffer, int fbWidth, Deki::ColorFormat format,
-                                int32_t x0, int32_t y0, int32_t x1, int32_t y1)
+void TactilityDisplay::PushRect(const uint8_t* framebuffer, int fbWidth, Deki::ColorFormat format, int32_t x0,
+                                int32_t y0, int32_t x1, int32_t y1)
 {
     if (format != m_PanelFormat)
     {
-        DEKI_LOG_ERROR("TactilityDisplay: frame is format %d but the panel is %d",
-                       (int)format, (int)m_PanelFormat);
+        DEKI_LOG_ERROR("TactilityDisplay: frame is format %d but the panel is %d", (int)format, (int)m_PanelFormat);
         return;
     }
 
@@ -233,13 +235,30 @@ void TactilityDisplay::PushRect(const uint8_t* framebuffer, int fbWidth, Deki::C
     // per line, and the driver is not asked to draw off its edge. The engine
     // sizes the framebuffer to this panel, so this only ever trims a caller's
     // mistake.
-    if (x0 < 0) x0 = 0;
-    if (y0 < 0) y0 = 0;
-    if (x1 > m_DisplayWidth) x1 = m_DisplayWidth;
-    if (y1 > m_DisplayHeight) y1 = m_DisplayHeight;
-    if (x1 > fbWidth) x1 = fbWidth;
+    if (x0 < 0)
+    {
+        x0 = 0;
+    }
+    if (y0 < 0)
+    {
+        y0 = 0;
+    }
+    if (x1 > m_DisplayWidth)
+    {
+        x1 = m_DisplayWidth;
+    }
+    if (y1 > m_DisplayHeight)
+    {
+        y1 = m_DisplayHeight;
+    }
+    if (x1 > fbWidth)
+    {
+        x1 = fbWidth;
+    }
     if (x1 <= x0 || y1 <= y0)
+    {
         return;
+    }
 
     const size_t bpp = Deki::FrameBufferBytes(format, 1, 1);
     const int32_t rectWidth = x1 - x0;
@@ -266,21 +285,24 @@ void TactilityDisplay::PushRect(const uint8_t* framebuffer, int fbWidth, Deki::C
             {
                 ++m_DrawFailures;
                 if (m_DrawFailures == 1 || (m_DrawFailures % 1000) == 0)
+                {
                     DEKI_LOG_ERROR("TactilityDisplay: the panel refused a draw (%s); %u refused so far",
                                    error_to_string(result), m_DrawFailures);
+                }
             }
         }
         else
         {
-            DEKI_LOG_WARNING("TactilityDisplay: panel lock timed out, dropped rows %d-%d",
-                             (int)top, (int)bottom);
+            DEKI_LOG_WARNING("TactilityDisplay: panel lock timed out, dropped rows %d-%d", (int)top, (int)bottom);
         }
     };
 
     if (rowByRow)
     {
         for (int32_t y = y0; y < y1; ++y)
+        {
             draw(y, y + 1, framebuffer + (size_t)y * fbStride + (size_t)x0 * bpp);
+        }
         return;
     }
 
@@ -303,9 +325,13 @@ void TactilityDisplay::PushRect(const uint8_t* framebuffer, int fbWidth, Deki::C
                 const uint8_t* src = framebuffer + (size_t)(y + r) * fbStride + (size_t)x0 * bpp;
                 uint8_t* dst = m_Band + (size_t)r * rowBytes;
                 if (m_NeedsByteSwap)
+                {
                     CopySwapped16(dst, src, (size_t)rectWidth);
+                }
                 else
+                {
                     std::memcpy(dst, src, rowBytes);
+                }
             }
             source = m_Band;
         }
@@ -316,15 +342,21 @@ void TactilityDisplay::PushRect(const uint8_t* framebuffer, int fbWidth, Deki::C
 void TactilityDisplay::GetDisplaySize(int32_t* width, int32_t* height) const
 {
     if (width != nullptr)
+    {
         *width = m_DisplayWidth;
+    }
     if (height != nullptr)
+    {
         *height = m_DisplayHeight;
+    }
 }
 
 void TactilityDisplay::RequestFullRefresh()
 {
     if (!m_Initialized)
+    {
         return;
+    }
     // Meaningful on e-paper, where it clears accumulated ghosting; the driver
     // reports ERROR_NOT_SUPPORTED on panels that have no such operation.
     display_refresh(m_Device);
@@ -349,37 +381,64 @@ void TactilityDisplay::SetBacklight(bool on)
 
 TactilityDisplay::TactilityDisplay() = default;
 TactilityDisplay::~TactilityDisplay() = default;
-bool TactilityDisplay::Initialize(int32_t, int32_t) { return false; }
-void TactilityDisplay::Shutdown() {}
-void TactilityDisplay::Present(const uint8_t*, int, int, Deki::ColorFormat) {}
-void TactilityDisplay::PresentRegions(const uint8_t*, int, int, Deki::ColorFormat,
-                                      const Deki::Rect*, int32_t) {}
+bool TactilityDisplay::Initialize(int32_t, int32_t)
+{
+    return false;
+}
+void TactilityDisplay::Shutdown()
+{
+}
+void TactilityDisplay::Present(const uint8_t*, int, int, Deki::ColorFormat)
+{
+}
+void TactilityDisplay::PresentRegions(const uint8_t*, int, int, Deki::ColorFormat, const Deki::Rect*, int32_t)
+{
+}
 void TactilityDisplay::GetDisplaySize(int32_t* width, int32_t* height) const
 {
     if (width != nullptr)
+    {
         *width = 0;
+    }
     if (height != nullptr)
+    {
         *height = 0;
+    }
 }
-void TactilityDisplay::RequestFullRefresh() {}
-bool TactilityDisplay::ProcessEvents() { return true; }
-void TactilityDisplay::SetBacklight(bool) {}
+void TactilityDisplay::RequestFullRefresh()
+{
+}
+bool TactilityDisplay::ProcessEvents()
+{
+    return true;
+}
+void TactilityDisplay::SetBacklight(bool)
+{
+}
 
 #endif  // DEKI_TACTILITY_TARGET
 
 // Overlay support is unimplemented on both paths — see the header.
-void* TactilityDisplay::CreateUIOverlay(int32_t, int32_t) { return nullptr; }
+void* TactilityDisplay::CreateUIOverlay(int32_t, int32_t)
+{
+    return nullptr;
+}
 bool TactilityDisplay::UpdateUIOverlay(void*, int32_t, int32_t, int32_t, int32_t, const uint32_t*)
 {
     return false;
 }
-bool TactilityDisplay::UpdateUIOverlayRGB565A8(void*, int32_t, int32_t, int32_t, int32_t,
-                                               const uint8_t*)
+bool TactilityDisplay::UpdateUIOverlayRGB565A8(void*, int32_t, int32_t, int32_t, int32_t, const uint8_t*)
 {
     return false;
 }
-void TactilityDisplay::DestroyUIOverlay(void*) {}
-void TactilityDisplay::SetActiveUIOverlay(void*) {}
-void TactilityDisplay::ClearActiveUIOverlay() {}
+void TactilityDisplay::DestroyUIOverlay(void*)
+{
+}
+void TactilityDisplay::SetActiveUIOverlay(void*)
+{
+}
+void TactilityDisplay::ClearActiveUIOverlay()
+{
+}
 
 }  // namespace DekiTactility

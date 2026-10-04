@@ -26,7 +26,7 @@ namespace DekiTactility
  */
 class TactilityFileSystem : public Deki::IFileSystem
 {
-   public:
+public:
     /**
      * @param appId the id from manifest.properties; Tactility keys both
      *              directories off it.
@@ -47,7 +47,7 @@ class TactilityFileSystem : public Deki::IFileSystem
     bool FileExists(const char* path) override;
     bool ConvertPath(const char* virtualPath, char* outBuffer, size_t bufferSize) override;
 
-   private:
+private:
     /// Resolve a virtual path to a real one. Empty on failure.
     std::string Resolve(const char* virtualPath) const;
 

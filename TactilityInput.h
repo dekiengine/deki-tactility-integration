@@ -28,7 +28,7 @@ namespace DekiTactility
  */
 class TactilityInput : public DekiInput::IDekiInput
 {
-   public:
+public:
     TactilityInput() = default;
     ~TactilityInput() override;
 
@@ -41,7 +41,7 @@ class TactilityInput : public DekiInput::IDekiInput
     bool GetPointerPosition(int32_t* x, int32_t* y) const override;
     bool IsKeyPressed(uint32_t key) const override;
 
-   private:
+private:
     void PollPointer();
     void PollKeyboard();
     void Emit(const DekiInput::InputEvent& event);

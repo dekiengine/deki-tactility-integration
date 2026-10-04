@@ -84,14 +84,12 @@ public:
     /// simulator ignores it. Output goes to onLine. Returns an empty string on
     /// success, else what went wrong.
     static std::string Build(const std::string& platform, const std::string& idfPath,
-                             const std::function<void(const std::string&)>& onLine,
-                             const std::atomic<bool>* cancel);
+                             const std::function<void(const std::string&)>& onLine, const std::atomic<bool>* cancel);
 
     /// Make sure a simulator is answering on this machine: use the one that
     /// is, or start the built one at `width`x`height` with its development
     /// service on, and wait for it. Returns an empty string on success.
-    static std::string EnsureSimulator(int width, int height,
-                                       const std::function<void(const std::string&)>& onLine,
+    static std::string EnsureSimulator(int width, int height, const std::function<void(const std::string&)>& onLine,
                                        const std::atomic<bool>* cancel);
 };
 

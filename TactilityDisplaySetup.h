@@ -31,9 +31,10 @@ DEKI_CATEGORY("Tactility")
 DEKI_DESCRIPTION("Gives the game Tactility's display: the whole panel, or a window with the OS still running.")
 class DEKI_TACTILITY_API TactilityDisplaySetup : public Deki::SetupComponent
 {
-   public:
+public:
     DEKI_EXPORT
-    DEKI_TOOLTIP("Panel takes the whole display over and stops LVGL, so the game owns every pixel. Window runs the game in an app window with LVGL and the OS still running around it, at the platform's screen size.")
+    DEKI_TOOLTIP("Panel takes the whole display over and stops LVGL, so the game owns every pixel. Window runs the "
+                 "game in an app window with LVGL and the OS still running around it, at the platform's screen size.")
     TactilityDisplayMode mode = TactilityDisplayMode::Panel;
 
     void Setup(SetupCallback onComplete) override;

@@ -20,7 +20,9 @@ namespace
 std::string DeviceFor(const std::string& idfTarget)
 {
     if (idfTarget == "esp32s3" || idfTarget == "esp32p4")
+    {
         return "generic-" + idfTarget;
+    }
     return {};
 }
 
@@ -70,15 +72,21 @@ std::string PatchSimulator(const fs::path& src)
     {
         std::ifstream in(file, std::ios::binary);
         if (!in)
+        {
             return "the simulator source " + file.string() + " is missing";
+        }
         text.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
     }
     if (text.find("deki_sdl_display_config") != std::string::npos)
+    {
         return {};  // already patched: the checkout keeps local changes
+    }
     const size_t at = text.find(kSimulatorSizeLine);
     if (at == std::string::npos)
+    {
         return "the simulator's display setup is not what the Deki patch expects in " + file.string() +
                "; the pinned Tactility changed, and the patch needs updating with it";
+    }
     text.replace(at, std::string(kSimulatorSizeLine).size(), kSimulatorSizePatch);
     std::ofstream out(file, std::ios::binary | std::ios::trunc);
     out << text;
@@ -91,7 +99,9 @@ std::string ReadFirstLine(const fs::path& file)
     std::string line;
     std::getline(in, line);
     while (!line.empty() && (line.back() == '\r' || line.back() == ' '))
+    {
         line.pop_back();
+    }
     return line;
 }
 }  // namespace
@@ -129,33 +139,42 @@ bool TactilitySdk::IsPosix(const std::string& platform)
 bool TactilitySdk::IsBuilt(const std::string& platform)
 {
     if (platform.empty())
+    {
         return false;
+    }
     std::error_code ec;
     const fs::path sdk = SdkDir(platform);
     const fs::path tool = ToolDir();
     if (!fs::is_regular_file(tool / "tactility.py", ec))
+    {
         return false;
+    }
     // release-sdk-posix.py writes the top-level CMakeLists.txt last;
     // release-sdk-esp32.py writes idf-version.txt last. A device app also
     // needs the app configuration tactility.py would otherwise download.
     if (IsPosix(platform))
+    {
         return fs::is_regular_file(sdk / "CMakeLists.txt", ec) &&
                ReadFirstLine(sdk / kSimulatorPatchMarker) == kSimulatorPatchId;
+    }
     return fs::is_regular_file(sdk / "idf-version.txt", ec) &&
            fs::is_regular_file(tool / "CDN" / ("sdkconfig.app." + platform), ec);
 }
 
 std::string TactilitySdk::Build(const std::string& platform, const std::string& idfPath,
-                                const std::function<void(const std::string&)>& onLine,
-                                const std::atomic<bool>* cancel)
+                                const std::function<void(const std::string&)>& onLine, const std::atomic<bool>* cancel)
 {
     const bool posix = IsPosix(platform);
     const std::string device = posix ? std::string() : DeviceFor(platform);
     if (!posix && device.empty())
+    {
         return "no Tactility SDK for '" + platform + "'; an app runs only on esp32s3, esp32p4 or the simulator";
+    }
 #ifdef _WIN32
     if (posix)
+    {
         return "the Tactility simulator SDK builds on Linux only";
+    }
 #endif
 
     std::error_code ec;
@@ -167,56 +186,73 @@ std::string TactilitySdk::Build(const std::string& platform, const std::string& 
         onLine("> " + what);
         const int code = RunShellCommand(line, dir, onLine, cancel);
         if (cancel != nullptr && cancel->load())
+        {
             return "cancelled";
+        }
         if (code != 0)
+        {
             return what + " failed (exit code " + std::to_string(code) + ")";
+        }
         return {};
     };
 
     // A repository at a pinned commit. A partial clone: history without file
     // contents, which is all a checkout of one commit needs. Then the checkout
     // is verified - a pin nobody checks is not one.
-    auto checkout = [&](const std::string& name, const std::string& url, const std::string& commit,
-                        const fs::path& dir, bool submodules) -> std::string
+    auto checkout = [&](const std::string& name, const std::string& url, const std::string& commit, const fs::path& dir,
+                        bool submodules) -> std::string
     {
         if (!fs::exists(dir / ".git", ec))
         {
-            if (auto err = run("Cloning " + name,
-                               "git clone --filter=blob:none --no-checkout \"" + url + "\" \"" +
-                                   Native(dir.string()) + "\"",
-                               Native(Root()));
+            if (auto err =
+                    run("Cloning " + name,
+                        "git clone --filter=blob:none --no-checkout \"" + url + "\" \"" + Native(dir.string()) + "\"",
+                        Native(Root()));
                 !err.empty())
+            {
                 return err;
+            }
         }
         const std::string git = "git -C \"" + Native(dir.string()) + "\" ";
         if (auto err = run("Checking out " + name + " " + commit.substr(0, 12), git + "checkout --detach " + commit,
                            Native(Root()));
             !err.empty())
+        {
             return err;
+        }
         if (submodules)
         {
             if (auto err = run("Fetching " + name + " submodules",
                                git + "submodule update --init --recursive --filter=blob:none", Native(Root()));
                 !err.empty())
+            {
                 return err;
+            }
         }
         std::string head;
-        RunShellCommand(git + "rev-parse HEAD", Native(Root()), [&head](const std::string& l) { head = l; },
-                        cancel);
+        RunShellCommand(git + "rev-parse HEAD", Native(Root()), [&head](const std::string& l) { head = l; }, cancel);
         if (head != commit)
+        {
             return "the " + name + " checkout is at '" + head + "', not the pinned " + commit;
+        }
         return {};
     };
 
     // 1. Tactility's sources, with their submodules, and TactilityTool.
     if (auto err = checkout("Tactility", TactilityPin::kRepository, TactilityPin::kCommit, src, true); !err.empty())
+    {
         return err;
+    }
     if (auto err = checkout("TactilityTool", TactilityPin::kToolRepository, TactilityPin::kToolCommit,
                             fs::path(ToolDir()), false);
         !err.empty())
+    {
         return err;
+    }
     if (!posix && !fs::is_regular_file(fs::path(ToolDir()) / "CDN" / ("sdkconfig.app." + platform), ec))
+    {
         return "TactilityTool at the pinned commit has no CDN/sdkconfig.app." + platform;
+    }
 
     const fs::path sdk = SdkDir(platform);
     fs::remove_all(sdk, ec);
@@ -230,7 +266,9 @@ std::string TactilitySdk::Build(const std::string& platform, const std::string& 
     if (posix)
     {
         if (auto err = PatchSimulator(src); !err.empty())
+        {
             return err;
+        }
         onLine("Simulator patched: display size from TACTILITY_SIMULATOR_RESOLUTION");
 
         // The simulator: Tactility's root CMakeLists builds it whenever
@@ -295,10 +333,12 @@ std::string TactilitySdk::Build(const std::string& platform, const std::string& 
 #endif
     }
 
-    if (auto err = run("Building TactilitySDK " + std::string(TactilityPin::kVersion) + " for " + platform,
-                       command, Native(src.string()));
+    if (auto err = run("Building TactilitySDK " + std::string(TactilityPin::kVersion) + " for " + platform, command,
+                       Native(src.string()));
         !err.empty())
+    {
         return err;
+    }
 
     if (!targetMarker.empty())
     {
@@ -312,14 +352,15 @@ std::string TactilitySdk::Build(const std::string& platform, const std::string& 
     }
 
     if (!IsBuilt(platform))
+    {
         return "the release script finished but " + Native(sdk.string()) + " is incomplete";
+    }
     onLine("TactilitySDK " + std::string(TactilityPin::kVersion) + " for " + platform + " ready at " +
            Native(sdk.string()));
     return {};
 }
 
-std::string TactilitySdk::EnsureSimulator(int width, int height,
-                                          const std::function<void(const std::string&)>& onLine,
+std::string TactilitySdk::EnsureSimulator(int width, int height, const std::function<void(const std::string&)>& onLine,
                                           const std::atomic<bool>* cancel)
 {
 #ifdef _WIN32
@@ -346,8 +387,8 @@ std::string TactilitySdk::EnsureSimulator(int width, int height,
         long pid = 0;
         std::string size;
         in >> pid >> size;
-        const bool ours = pid > 0 && RunShellCommand("kill -0 " + std::to_string(pid) + " 2>/dev/null", Root(),
-                                                     quiet, cancel) == 0;
+        const bool ours =
+            pid > 0 && RunShellCommand("kill -0 " + std::to_string(pid) + " 2>/dev/null", Root(), quiet, cancel) == 0;
         if (!ours || size == resolution)
         {
             onLine(ours ? "Using the Tactility simulator already running at " + resolution
@@ -360,7 +401,9 @@ std::string TactilitySdk::EnsureSimulator(int width, int height,
         for (int attempt = 0; attempt < 20; ++attempt)
         {
             if (RunShellCommand("kill -0 " + std::to_string(pid) + " 2>/dev/null", Root(), quiet, cancel) != 0)
+            {
                 break;
+            }
             RunShellCommand("sleep 0.25", Root(), quiet, cancel);
         }
     }
@@ -370,7 +413,9 @@ std::string TactilitySdk::EnsureSimulator(int width, int height,
     const fs::path data = src / "Data";
     std::error_code ec;
     if (!fs::is_regular_file(binary, ec))
+    {
         return "the simulator is not built (" + binary.string() + "); install the TactilitySDK component";
+    }
 
     // Its development service, the thing an app is installed through, is off
     // until a setting turns it on at boot: the one its Development app writes.
@@ -391,14 +436,20 @@ std::string TactilitySdk::EnsureSimulator(int width, int height,
                               " setsid nohup \"" + binary.string() + "\" > \"" + log.string() +
                               "\" 2>&1 < /dev/null & echo \"$! " + resolution + "\" > \"" + started.string() + "\"";
     if (RunShellCommand(start, data.string(), onLine, cancel) != 0)
+    {
         return "could not start the simulator";
+    }
 
     for (int attempt = 0; attempt < 60; ++attempt)
     {
         if (cancel != nullptr && cancel->load())
+        {
             return "cancelled";
+        }
         if (RunShellCommand(probe + " 2>/dev/null", Root(), quiet, cancel) == 0)
+        {
             return {};
+        }
         RunShellCommand("sleep 0.5", Root(), quiet, cancel);
     }
     return "the simulator did not start answering on port 6666; see " + log.string();

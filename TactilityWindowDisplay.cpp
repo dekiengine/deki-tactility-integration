@@ -40,9 +40,13 @@ TactilityWindowDisplay::~TactilityWindowDisplay()
 void TactilityWindowDisplay::GetDisplaySize(int32_t* width, int32_t* height) const
 {
     if (width != nullptr)
+    {
         *width = m_Width;
+    }
     if (height != nullptr)
+    {
         *height = m_Height;
+    }
 }
 
 #if defined(DEKI_TACTILITY_TARGET)
@@ -70,18 +74,19 @@ uint32_t TranslateLvglKey(uint32_t key)
 {
     switch (key)
     {
-        case LV_KEY_ENTER:     return Keys::kEnter;
-        case LV_KEY_ESC:       return Keys::kEsc;
+        case LV_KEY_ENTER: return Keys::kEnter;
+        case LV_KEY_ESC: return Keys::kEsc;
         case LV_KEY_BACKSPACE: return Keys::kBackspace;
-        case LV_KEY_UP:        return Keys::kUp;
-        case LV_KEY_DOWN:      return Keys::kDown;
-        case LV_KEY_LEFT:      return Keys::kLeft;
-        case LV_KEY_RIGHT:     return Keys::kRight;
-        default:
-            break;
+        case LV_KEY_UP: return Keys::kUp;
+        case LV_KEY_DOWN: return Keys::kDown;
+        case LV_KEY_LEFT: return Keys::kLeft;
+        case LV_KEY_RIGHT: return Keys::kRight;
+        default: break;
     }
     if (key >= 32 && key <= 126)
+    {
         return key;
+    }
     return 0;
 }
 }  // namespace
@@ -100,7 +105,9 @@ void TactilityWindowDisplay::Unlock()
 bool TactilityWindowDisplay::Initialize(int32_t, int32_t)
 {
     if (m_Initialized)
+    {
         return true;
+    }
 
     if (!lvgl_is_running())
     {
@@ -123,8 +130,8 @@ bool TactilityWindowDisplay::Initialize(int32_t, int32_t)
     s_ActiveWindow = this;
     // Builds the canvas right away (the new window is on top), on LVGL's
     // side of the lock.
-    m_WindowId = window_manager_create_ext(app_scheduler_current_app_id(), CreateWidgetsThunk, DestroyWidgetsThunk,
-                                           this);
+    m_WindowId =
+        window_manager_create_ext(app_scheduler_current_app_id(), CreateWidgetsThunk, DestroyWidgetsThunk, this);
     if (m_WindowId == 0)
     {
         DEKI_LOG_ERROR("TactilityWindowDisplay: the window manager is not running");
@@ -157,7 +164,9 @@ void TactilityWindowDisplay::Shutdown()
         m_Buffer = nullptr;
     }
     if (s_ActiveWindow == this)
+    {
         s_ActiveWindow = nullptr;
+    }
     m_Initialized = false;
 }
 
@@ -211,7 +220,9 @@ void TactilityWindowDisplay::DropWidgets()
 void TactilityWindowDisplay::Queue(const DekiInput::InputEvent& event)
 {
     if (m_QueueCount < kQueueSize)
+    {
         m_Queue[m_QueueCount++] = event;
+    }
 }
 
 void TactilityWindowDisplay::HandleCanvasEvent(void* eventObject)
@@ -227,7 +238,9 @@ void TactilityWindowDisplay::HandleCanvasEvent(void* eventObject)
     {
         lv_indev_t* indev = lv_indev_active();
         if (indev == nullptr)
+        {
             return;
+        }
         lv_point_t point;
         lv_indev_get_point(indev, &point);
         out.x = point.x - m_CanvasX;
@@ -246,7 +259,9 @@ void TactilityWindowDisplay::HandleCanvasEvent(void* eventObject)
         else
         {
             if (!m_PointerDown)
+            {
                 return;
+            }
             m_PointerDown = false;
             out.type = DekiInput::InputEventType::MOUSE_BUTTON_UP;
         }
@@ -256,7 +271,9 @@ void TactilityWindowDisplay::HandleCanvasEvent(void* eventObject)
     {
         const uint32_t key = TranslateLvglKey(lv_event_get_key(event));
         if (key == 0)
+        {
             return;
+        }
         // LVGL reports a key once, as it goes down (again on repeat), and
         // never as it comes up.
         out.key = key;
@@ -272,28 +289,47 @@ void TactilityWindowDisplay::HandleCanvasEvent(void* eventObject)
 void TactilityWindowDisplay::CopyRect(const uint8_t* framebuffer, int fbWidth, int32_t x0, int32_t y0, int32_t x1,
                                       int32_t y1)
 {
-    if (x0 < 0) x0 = 0;
-    if (y0 < 0) y0 = 0;
-    if (x1 > m_Width) x1 = m_Width;
-    if (y1 > m_Height) y1 = m_Height;
+    if (x0 < 0)
+    {
+        x0 = 0;
+    }
+    if (y0 < 0)
+    {
+        y0 = 0;
+    }
+    if (x1 > m_Width)
+    {
+        x1 = m_Width;
+    }
+    if (y1 > m_Height)
+    {
+        y1 = m_Height;
+    }
     if (x1 <= x0 || y1 <= y0)
+    {
         return;
+    }
     const size_t rowBytes = (size_t)(x1 - x0) * 2;
     for (int32_t y = y0; y < y1; ++y)
-        std::memcpy(m_Buffer + ((size_t)y * m_Width + x0) * 2, framebuffer + ((size_t)y * fbWidth + x0) * 2,
-                    rowBytes);
+    {
+        std::memcpy(m_Buffer + ((size_t)y * m_Width + x0) * 2, framebuffer + ((size_t)y * fbWidth + x0) * 2, rowBytes);
+    }
 }
 
-void TactilityWindowDisplay::PresentRegions(const uint8_t* framebuffer, int width, int height,
-                                            Deki::ColorFormat format, const Deki::Rect* rects, int32_t count)
+void TactilityWindowDisplay::PresentRegions(const uint8_t* framebuffer, int width, int height, Deki::ColorFormat format,
+                                            const Deki::Rect* rects, int32_t count)
 {
     if (!m_Initialized || framebuffer == nullptr || count == 0)
+    {
         return;
+    }
     if (format != Deki::ColorFormat::RGB565)
     {
         static bool s_Warned = false;
         if (!s_Warned)
+        {
             DEKI_LOG_ERROR("TactilityWindowDisplay: frames are format %d; the window shows RGB565 only", (int)format);
+        }
         s_Warned = true;
         return;
     }
@@ -308,13 +344,14 @@ void TactilityWindowDisplay::PresentRegions(const uint8_t* framebuffer, int widt
         else
         {
             for (int32_t i = 0; i < count; ++i)
+            {
                 CopyRect(framebuffer, width, rects[i].left, rects[i].top, rects[i].right, rects[i].bottom);
+            }
         }
         // Handing the buffer back drops LVGL's cached copy of the image and
         // redraws it: a canvas written to directly otherwise shows its old
         // pixels.
-        lv_canvas_set_buffer(static_cast<lv_obj_t*>(m_Canvas), m_Buffer, m_Width, m_Height,
-                             LV_COLOR_FORMAT_RGB565);
+        lv_canvas_set_buffer(static_cast<lv_obj_t*>(m_Canvas), m_Buffer, m_Width, m_Height, LV_COLOR_FORMAT_RGB565);
     }
     Unlock();
 }
@@ -326,17 +363,41 @@ void TactilityWindowDisplay::Present(const uint8_t* framebuffer, int width, int 
 
 #else  // !DEKI_TACTILITY_TARGET — editor/host build, no Tactility SDK present
 
-bool TactilityWindowDisplay::Lock() { return false; }
-void TactilityWindowDisplay::Unlock() {}
-bool TactilityWindowDisplay::Initialize(int32_t, int32_t) { return false; }
-void TactilityWindowDisplay::Shutdown() {}
-void TactilityWindowDisplay::BuildWidgets(void*) {}
-void TactilityWindowDisplay::DropWidgets() {}
-void TactilityWindowDisplay::HandleCanvasEvent(void*) {}
-void TactilityWindowDisplay::Queue(const DekiInput::InputEvent&) {}
-void TactilityWindowDisplay::CopyRect(const uint8_t*, int, int32_t, int32_t, int32_t, int32_t) {}
-void TactilityWindowDisplay::PresentRegions(const uint8_t*, int, int, Deki::ColorFormat, const Deki::Rect*, int32_t) {}
-void TactilityWindowDisplay::Present(const uint8_t*, int, int, Deki::ColorFormat) {}
+bool TactilityWindowDisplay::Lock()
+{
+    return false;
+}
+void TactilityWindowDisplay::Unlock()
+{
+}
+bool TactilityWindowDisplay::Initialize(int32_t, int32_t)
+{
+    return false;
+}
+void TactilityWindowDisplay::Shutdown()
+{
+}
+void TactilityWindowDisplay::BuildWidgets(void*)
+{
+}
+void TactilityWindowDisplay::DropWidgets()
+{
+}
+void TactilityWindowDisplay::HandleCanvasEvent(void*)
+{
+}
+void TactilityWindowDisplay::Queue(const DekiInput::InputEvent&)
+{
+}
+void TactilityWindowDisplay::CopyRect(const uint8_t*, int, int32_t, int32_t, int32_t, int32_t)
+{
+}
+void TactilityWindowDisplay::PresentRegions(const uint8_t*, int, int, Deki::ColorFormat, const Deki::Rect*, int32_t)
+{
+}
+void TactilityWindowDisplay::Present(const uint8_t*, int, int, Deki::ColorFormat)
+{
+}
 
 #endif  // DEKI_TACTILITY_TARGET
 

@@ -12,11 +12,11 @@
 
 // DLL export macro
 #ifdef _WIN32
-    #ifdef DEKI_TACTILITY_EXPORTS
-        #define DEKI_TACTILITY_API __declspec(dllexport)
-    #else
-        #define DEKI_TACTILITY_API __declspec(dllimport)
-    #endif
+#ifdef DEKI_TACTILITY_EXPORTS
+#define DEKI_TACTILITY_API __declspec(dllexport)
 #else
-    #define DEKI_TACTILITY_API __attribute__((visibility("default")))
+#define DEKI_TACTILITY_API __declspec(dllimport)
+#endif
+#else
+#define DEKI_TACTILITY_API __attribute__((visibility("default")))
 #endif

@@ -18,7 +18,7 @@ DEKI_CATEGORY("Tactility")
 DEKI_DESCRIPTION("Feeds Tactility's touch and keyboard into Deki's input system.")
 class DEKI_TACTILITY_API TactilityInputSetup : public Deki::SetupComponent
 {
-   public:
+public:
     void Setup(SetupCallback onComplete) override;
     const char* GetSetupName() const override { return "Tactility Input"; }
 };

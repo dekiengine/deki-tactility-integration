@@ -23,9 +23,13 @@ void TactilityDisplaySetup::Setup(SetupCallback onComplete)
 {
     const bool window = (mode == TactilityDisplayMode::Window);
     if (window)
+    {
         s_Display = std::make_unique<TactilityWindowDisplay>();
+    }
     else
+    {
         s_Display = std::make_unique<TactilityDisplay>();
+    }
 
     // 0x0 means "no expectation": on Tactility the OS owns the panel and
     // reports its real resolution, so there is nothing useful to assert here.

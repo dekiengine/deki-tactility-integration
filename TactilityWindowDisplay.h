@@ -34,7 +34,7 @@ namespace DekiTactility
  */
 class TactilityWindowDisplay : public Deki::IDisplay
 {
-   public:
+public:
     TactilityWindowDisplay();
     ~TactilityWindowDisplay() override;
 
@@ -77,7 +77,7 @@ class TactilityWindowDisplay : public Deki::IDisplay
     void DropWidgets();
     void HandleCanvasEvent(void* event);
 
-   private:
+private:
     bool Lock();
     void Unlock();
     void Queue(const DekiInput::InputEvent& event);
@@ -114,16 +114,22 @@ template <typename Emit>
 void TactilityWindowDisplay::DrainInput(Emit&& emit)
 {
     if (!Lock())
+    {
         return;
+    }
     DekiInput::InputEvent pending[kQueueSize];
     const int count = m_QueueCount;
     for (int i = 0; i < count; ++i)
+    {
         pending[i] = m_Queue[i];
+    }
     m_QueueCount = 0;
     Unlock();
     // Outside the lock: a game callback may do anything, including block.
     for (int i = 0; i < count; ++i)
+    {
         emit(pending[i]);
+    }
 }
 
 }  // namespace DekiTactility

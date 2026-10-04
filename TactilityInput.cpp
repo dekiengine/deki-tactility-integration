@@ -24,15 +24,14 @@ uint32_t TactilityInput::TranslateCodePoint(uint32_t codepoint)
     {
         // Enter, escape and backspace already agree: Tactility spells them as
         // the C0 control codes, which is exactly what Deki's ids are.
-        case CODEPOINT_ENTER:     return Keys::kEnter;
-        case CODEPOINT_ESCAPE:    return Keys::kEsc;
+        case CODEPOINT_ENTER: return Keys::kEnter;
+        case CODEPOINT_ESCAPE: return Keys::kEsc;
         case CODEPOINT_BACKSPACE: return Keys::kBackspace;
-        case CODEPOINT_ARROW_UP:    return Keys::kUp;
-        case CODEPOINT_ARROW_DOWN:  return Keys::kDown;
-        case CODEPOINT_ARROW_LEFT:  return Keys::kLeft;
+        case CODEPOINT_ARROW_UP: return Keys::kUp;
+        case CODEPOINT_ARROW_DOWN: return Keys::kDown;
+        case CODEPOINT_ARROW_LEFT: return Keys::kLeft;
         case CODEPOINT_ARROW_RIGHT: return Keys::kRight;
-        default:
-            break;
+        default: break;
     }
 #endif
 
@@ -40,7 +39,9 @@ uint32_t TactilityInput::TranslateCodePoint(uint32_t codepoint)
     // deki-sdl3-integration uses. Anything else (HOME, END, non-Latin
     // codepoints) has no Deki id and is reported as 0 = unmapped.
     if (codepoint >= 32 && codepoint <= 126)
+    {
         return codepoint;
+    }
     return 0;
 }
 
@@ -59,16 +60,22 @@ void TactilityInput::Emit(const DekiInput::InputEvent& event)
     for (const auto& callback : m_Callbacks)
     {
         if (callback)
+        {
             callback(event);
+        }
     }
 }
 
 bool TactilityInput::GetPointerPosition(int32_t* x, int32_t* y) const
 {
     if (x != nullptr)
+    {
         *x = m_TouchX;
+    }
     if (y != nullptr)
+    {
         *y = m_TouchY;
+    }
     return m_Initialized;
 }
 
@@ -77,7 +84,9 @@ bool TactilityInput::IsKeyPressed(uint32_t key) const
     for (int i = 0; i < m_HeldKeyCount; ++i)
     {
         if (m_HeldKeys[i] == key)
+        {
             return true;
+        }
     }
     return false;
 }
@@ -87,15 +96,21 @@ bool TactilityInput::IsKeyPressed(uint32_t key) const
 bool TactilityInput::Initialize()
 {
     if (m_Initialized)
+    {
         return true;
+    }
 
     // Both devices are optional. A board may have touch and no keyboard (most
     // panels), or a keyboard and no touch (Cardputer); only having neither is
     // a failure, since then this backend can produce nothing.
     if (device_get_first_active_by_type(&POINTER_TYPE, &m_Pointer) != ERROR_NONE)
+    {
         m_Pointer = nullptr;
+    }
     if (device_get_first_active_by_type(&KEYBOARD_TYPE, &m_Keyboard) != ERROR_NONE)
+    {
         m_Keyboard = nullptr;
+    }
 
     if (m_Pointer == nullptr && m_Keyboard == nullptr)
     {
@@ -104,8 +119,7 @@ bool TactilityInput::Initialize()
     }
 
     m_Initialized = true;
-    DEKI_LOG_INFO("TactilityInput: pointer=%s keyboard=%s",
-                  m_Pointer ? "yes" : "no", m_Keyboard ? "yes" : "no");
+    DEKI_LOG_INFO("TactilityInput: pointer=%s keyboard=%s", m_Pointer ? "yes" : "no", m_Keyboard ? "yes" : "no");
     return true;
 }
 
@@ -130,14 +144,21 @@ void TactilityInput::Shutdown()
 void TactilityInput::Update()
 {
     if (!m_Initialized)
+    {
         return;
+    }
 
     // In a window, LVGL is running and owns the pointer and keyboard: reading
     // the devices here as well would split the keystrokes between the two.
     // The window's canvas collects them instead.
     if (TactilityWindowDisplay* window = TactilityWindowDisplay::Active())
     {
-        window->DrainInput([this](const DekiInput::InputEvent& event) { Track(event); Emit(event); });
+        window->DrainInput(
+            [this](const DekiInput::InputEvent& event)
+            {
+                Track(event);
+                Emit(event);
+            });
         return;
     }
 
@@ -155,12 +176,12 @@ void TactilityInput::Track(const DekiInput::InputEvent& event)
             m_TouchX = event.x;
             m_TouchY = event.y;
             break;
-        case DekiInput::InputEventType::MOUSE_BUTTON_UP:
-            m_Touched = false;
-            break;
+        case DekiInput::InputEventType::MOUSE_BUTTON_UP: m_Touched = false; break;
         case DekiInput::InputEventType::KEY_DOWN:
             if (!IsKeyPressed(event.key) && m_HeldKeyCount < kMaxHeldKeys)
+            {
                 m_HeldKeys[m_HeldKeyCount++] = event.key;
+            }
             break;
         case DekiInput::InputEventType::KEY_UP:
             for (int i = 0; i < m_HeldKeyCount; ++i)
@@ -172,15 +193,16 @@ void TactilityInput::Track(const DekiInput::InputEvent& event)
                 }
             }
             break;
-        default:
-            break;
+        default: break;
     }
 }
 
 void TactilityInput::PollPointer()
 {
     if (m_Pointer == nullptr)
+    {
         return;
+    }
 
     // read_data() refreshes the controller's cached state; get_touched_points()
     // then reports it. Tactility gives us the CURRENT points, not events, so
@@ -239,20 +261,23 @@ void TactilityInput::PollPointer()
 void TactilityInput::PollKeyboard()
 {
     if (m_Keyboard == nullptr)
+    {
         return;
+    }
 
     for (int reads = 0; reads < kMaxKeyReadsPerUpdate; ++reads)
     {
         struct KeyboardKeyData data = {};
         if (keyboard_read_key(m_Keyboard, &data) != ERROR_NONE)
+        {
             break;
+        }
 
         const uint32_t key = TranslateCodePoint(data.key);
         if (key != 0)
         {
             DekiInput::InputEvent event = {};
-            event.type = data.pressed ? DekiInput::InputEventType::KEY_DOWN
-                                      : DekiInput::InputEventType::KEY_UP;
+            event.type = data.pressed ? DekiInput::InputEventType::KEY_DOWN : DekiInput::InputEventType::KEY_UP;
             event.key = key;
             event.pressed = data.pressed;
             event.timestamp = Deki::Time::GetTime();
@@ -261,7 +286,9 @@ void TactilityInput::PollKeyboard()
             if (data.pressed)
             {
                 if (!IsKeyPressed(key) && m_HeldKeyCount < kMaxHeldKeys)
+                {
                     m_HeldKeys[m_HeldKeyCount++] = key;
+                }
             }
             else
             {
@@ -279,18 +306,33 @@ void TactilityInput::PollKeyboard()
         // The driver sets this when more key data is already queued. Without
         // draining, a fast typist's keystrokes arrive one per frame.
         if (!data.continue_reading)
+        {
             break;
+        }
     }
 }
 
 #else  // !DEKI_TACTILITY_TARGET — editor/host build, no Tactility SDK present
 
-bool TactilityInput::Initialize() { return false; }
-void TactilityInput::Shutdown() {}
-void TactilityInput::Update() {}
-void TactilityInput::Track(const DekiInput::InputEvent&) {}
-void TactilityInput::PollPointer() {}
-void TactilityInput::PollKeyboard() {}
+bool TactilityInput::Initialize()
+{
+    return false;
+}
+void TactilityInput::Shutdown()
+{
+}
+void TactilityInput::Update()
+{
+}
+void TactilityInput::Track(const DekiInput::InputEvent&)
+{
+}
+void TactilityInput::PollPointer()
+{
+}
+void TactilityInput::PollKeyboard()
+{
+}
 
 #endif  // DEKI_TACTILITY_TARGET
 

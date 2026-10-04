@@ -41,7 +41,7 @@ namespace DekiTactility
  */
 class TactilityDisplay : public Deki::IDisplay
 {
-   public:
+public:
     TactilityDisplay();
     ~TactilityDisplay() override;
 
@@ -77,10 +77,10 @@ class TactilityDisplay : public Deki::IDisplay
     /// The panel's own colour format, queried at Initialize().
     Deki::ColorFormat GetPanelFormat() const { return m_PanelFormat; }
 
-   private:
+private:
     /// Push one half-open rectangle of the framebuffer to the panel.
-    void PushRect(const uint8_t* framebuffer, int fbWidth, Deki::ColorFormat format, int32_t x0, int32_t y0,
-                  int32_t x1, int32_t y1);
+    void PushRect(const uint8_t* framebuffer, int fbWidth, Deki::ColorFormat format, int32_t x0, int32_t y0, int32_t x1,
+                  int32_t y1);
 
     /// Rows staged per draw_bitmap call. 8 matches LovyanGFXDisplay; it keeps
     /// the staging buffer small (320 px * 8 rows * 2 B = 5 KB) while still

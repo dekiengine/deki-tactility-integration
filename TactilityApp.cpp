@@ -71,7 +71,9 @@ struct CloseListener
         while (subscribed && app_event_poll(&subscription, &event) == ERROR_NONE)
         {
             if (event.type == APP_EVENT_CLOSE)
+            {
                 return true;
+            }
         }
         return false;
     }
@@ -79,7 +81,9 @@ struct CloseListener
     ~CloseListener()
     {
         if (subscribed)
+        {
             app_event_unsubscribe(&subscription);
+        }
         task_event_group_destruct(&group);
     }
 };
@@ -94,14 +98,22 @@ extern "C" int main(int argc, char* argv[])
     (void)argc;
     (void)argv;
 
-    Deki::LogSystem::SetLogCallback([](Deki::LogLevel level, const std::string& msg, const char*, int) {
-        if (level == Deki::LogLevel::Error)
-            LOG_E(kTag, "%s", msg.c_str());
-        else if (level == Deki::LogLevel::Warning)
-            LOG_W(kTag, "%s", msg.c_str());
-        else
-            LOG_I(kTag, "%s", msg.c_str());
-    });
+    Deki::LogSystem::SetLogCallback(
+        [](Deki::LogLevel level, const std::string& msg, const char*, int)
+        {
+            if (level == Deki::LogLevel::Error)
+            {
+                LOG_E(kTag, "%s", msg.c_str());
+            }
+            else if (level == Deki::LogLevel::Warning)
+            {
+                LOG_W(kTag, "%s", msg.c_str());
+            }
+            else
+            {
+                LOG_I(kTag, "%s", msg.c_str());
+            }
+        });
 
     CloseListener close;
     if (!close.Subscribe())
@@ -115,12 +127,18 @@ extern "C" int main(int argc, char* argv[])
     Deki::Memory::SetBackend(new Deki::HostMemoryProvider());
     Deki::Time::SetTimeProvider(std::make_unique<TactilityTimeProvider>());
     if (!Deki::FileSystem::SetFileSystem(new TactilityFileSystem(DEKI_TACTILITY_APP_ID)))
+    {
         return 1;
+    }
 
-    Deki::Engine::GetInstance().RegisterUpdate([&close](uint32_t) {
-        if (close.CloseRequested())
-            Deki::Engine::GetInstance().StopMainLoop();
-    });
+    Deki::Engine::GetInstance().RegisterUpdate(
+        [&close](uint32_t)
+        {
+            if (close.CloseRequested())
+            {
+                Deki::Engine::GetInstance().StopMainLoop();
+            }
+        });
 
     return Deki::Main();
 }
