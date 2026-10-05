@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Changed
+- The boot scenes are saved in the current scene format, as the editor writes
+  them, so an adopted board matches its package copy.
 - The Tactility board template uses `externalMemorySize` and keeps `mcuChip`
   in `frameworkOptions`, as the editor saves them.
 - **Names follow the code style** (deki-engine/docs/codestyle): types, functions and enum values are PascalCase, constants kPascalCase, members m_PascalCase, locals and parameters camelCase. The code is formatted with clang-format 22.
