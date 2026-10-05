@@ -3,11 +3,10 @@
   "displayName": "Tactility App (ESP32-S3)",
   "family": "espressif",
   "framework": "tactility",
-  "mcuChip": "esp32s3",
   "screenWidth": 320,
   "screenHeight": 240,
   "colorFormat": "RGB565",
-  "psramSize": 8388608,
+  "externalMemorySize": 8388608,
   "provides": [
     "tactility",
     "wifi",
@@ -18,6 +17,7 @@
   ],
   "bootScene": "platforms/tactility_esp32s3/boot.scene",
   "frameworkOptions": {
+    "mcuChip": "esp32s3",
     "idfTarget": "esp32s3",
     "appId": "com.example.dekigame",
     "targetSdk": "0.8.0-dev",

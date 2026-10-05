@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Changed
+- The Tactility board template uses `externalMemorySize` and keeps `mcuChip`
+  in `frameworkOptions`, as the editor saves them.
 - **Names follow the code style** (deki-engine/docs/codestyle): types, functions and enum values are PascalCase, constants kPascalCase, members m_PascalCase, locals and parameters camelCase. The code is formatted with clang-format 22.
 - The functions the editor finds by name are PascalCase: DekiTactilityRegisterComponents, DekiTactilityGetAutoComponentCount, DekiTactilityEnsureRegistered and the rest. Built against engine ABI 21; a build of this package from before does not load and is rebuilt.
 
