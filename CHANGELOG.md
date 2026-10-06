@@ -1,8 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.18.0
 
 ### Changed
+- `minEngine` 0.18.0. Reflection ABI 21: the package must be rebuilt.
 - The boot scenes are saved in the current scene format, as the editor writes
   them, so an adopted board matches its package copy.
 - The Tactility board template uses `externalMemorySize` and keeps `mcuChip`
