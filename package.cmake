@@ -12,6 +12,9 @@ set(PACKAGE_SOURCES
     TactilityInput.cpp
     TactilityFileSystem.cpp
     TactilityApp.cpp
+    TactilityRuntime.cpp
+    TactilityLibc.c
+    TactilityLibcxx.cpp
 )
 set(PACKAGE_ENTRY TactilityPackage.cpp)
 set(PACKAGE_LINK_DEPS deki-input)

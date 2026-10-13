@@ -26,6 +26,7 @@
 #include <memory>
 
 #include "TactilityFileSystem.h"
+#include "TactilityRuntime.h"
 #include "TactilityTimeProvider.h"
 
 extern "C"
@@ -90,11 +91,11 @@ struct CloseListener
 
 using namespace DekiTactility;
 
-extern "C" int main(int argc, char* argv[])
+namespace
 {
-    (void)argc;
-    (void)argv;
 
+int RunGame()
+{
     Deki::LogSystem::SetLogCallback(
         [](Deki::LogLevel level, const std::string& msg, const char*, int)
         {
@@ -138,6 +139,21 @@ extern "C" int main(int argc, char* argv[])
         });
 
     return Deki::Main();
+}
+
+}  // namespace
+
+extern "C" int main(int argc, char* argv[])
+{
+    (void)argc;
+    (void)argv;
+
+    // Before anything touches a static: on a device nothing has constructed
+    // them yet (TactilityRuntime.h).
+    RunStaticConstructors();
+    const int result = RunGame();
+    RunStaticDestructors();
+    return result;
 }
 
 #endif  // DEKI_TACTILITY_TARGET && !DEKI_EDITOR

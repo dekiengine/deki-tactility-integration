@@ -18,9 +18,9 @@
 //   idfTarget          a chip, "esp32s3" or "esp32p4" - a device app
 //   tactilityPlatform  "posix-x86_64" - the Tactility simulator, on Linux
 //
-// Only the simulator builds end to end. A device app needs the same sources
-// compiled as an ESP-IDF component instead of a CMake target; that is not
-// written yet, and Build() says so.
+// The simulator compiles the game into the shared object the simulator loads
+// (GenerateSimulatorComponent); a device compiles it as the ESP-IDF component
+// elf_loader links into the relocatable ELF (GenerateDeviceComponent).
 
 #include <deki-editor/build/BuilderPlugin.h>
 #include <deki-editor/build/BuilderDefinition.h>
@@ -42,8 +42,11 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -162,6 +165,74 @@ std::string AppNameFor(const std::string& projectPath, const PlatformConfig& con
     std::ifstream in(fs::path(projectPath) / "deki.json");
     const nlohmann::json j = nlohmann::json::parse(in, nullptr, /*allow_exceptions=*/false);
     return j.is_object() ? j.value("name", std::string()) : std::string();
+}
+
+/// What a device app's ELF leaves for the loader to resolve, and whether it
+/// has thread-local storage, read straight from the file (ELF32, little
+/// endian, as every ESP32 chip is). Empty `error` on success.
+struct ElfImports
+{
+    std::vector<std::string> undefined;
+    // Symbols the app defines and exports. elf_loader resolves a relocation
+    // that names one through the firmware's tables, not the app, and fails.
+    std::vector<std::string> exported;
+    bool hasTls = false;
+    std::string error;
+};
+
+ElfImports ReadElfImports(const fs::path& path)
+{
+    ElfImports result;
+    std::ifstream in(path, std::ios::binary);
+    const std::string data((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    auto u16 = [&data](size_t at) -> uint32_t
+    { return at + 2 <= data.size() ? uint8_t(data[at]) | (uint8_t(data[at + 1]) << 8) : 0; };
+    auto u32 = [&data](size_t at) -> uint32_t
+    {
+        return at + 4 <= data.size() ? uint32_t(uint8_t(data[at])) | (uint32_t(uint8_t(data[at + 1])) << 8) |
+                                           (uint32_t(uint8_t(data[at + 2])) << 16) |
+                                           (uint32_t(uint8_t(data[at + 3])) << 24)
+                                     : 0;
+    };
+    if (data.size() < 52 || data.compare(0, 4, "\x7f" "ELF") != 0 || data[4] != 1 || data[5] != 1)
+    {
+        result.error = "not a 32-bit little-endian ELF: " + path.string();
+        return result;
+    }
+
+    constexpr uint32_t kShtDynsym = 11;
+    constexpr uint32_t kShfTls = 0x400;
+    const uint32_t shoff = u32(32);
+    const uint32_t shentsize = u16(46);
+    const uint32_t shnum = u16(48);
+    auto section = [&](uint32_t i, uint32_t field) { return u32(shoff + i * shentsize + field); };
+
+    for (uint32_t i = 0; i < shnum; ++i)
+    {
+        if (section(i, 8) & kShfTls)
+        {
+            result.hasTls = true;
+        }
+        if (section(i, 4) != kShtDynsym)
+        {
+            continue;
+        }
+        const uint32_t symOff = section(i, 16);
+        const uint32_t symSize = section(i, 20);
+        const uint32_t strIndex = section(i, 24);
+        const uint32_t strOff = section(strIndex, 16);
+        for (uint32_t at = symOff + 16; at + 16 <= symOff + symSize; at += 16)
+        {
+            const uint32_t name = u32(at);
+            const uint32_t shndx = u16(at + 14);
+            if (name == 0 || strOff + name >= data.size())
+            {
+                continue;
+            }
+            (shndx == 0 ? result.undefined : result.exported).emplace_back(data.c_str() + strOff + name);
+        }
+    }
+    return result;
 }
 
 class TactilityBuilder : public FirmwareBuilderBase
@@ -339,6 +410,42 @@ public:
             return false;
         }
         const std::string platform = SdkPlatformOf(config);
+        const bool posix = TactilitySdk::IsPosix(platform);
+
+        // A device app links with this package's script, which keeps the
+        // static constructor tables inside the sections elf_loader loads
+        // (link/tactility-app-xtensa.ld), written for Xtensa, and its version
+        // script, which exports nothing (link/tactility-app.map).
+        std::string linkScript;
+        std::string versionScript;
+        if (!posix)
+        {
+            if (platform != "esp32s3")
+            {
+                DEKI_LOG_ERROR("Tactility backend: device apps for %s need a link script for its architecture, "
+                               "which this package does not have yet; only esp32s3 builds",
+                               platform.c_str());
+                return false;
+            }
+            for (const auto& pkg : CMakeGen::ScanPackageManifests(projectPath))
+            {
+                if (pkg.id == "deki-tactility-integration")
+                {
+                    const fs::path link = fs::path(projectPath) / "packages" / pkg.dirName / "link";
+                    linkScript = ToCMakePath((link / "tactility-app-xtensa.ld").string());
+                    versionScript = ToCMakePath((link / "tactility-app.map").string());
+                }
+            }
+            std::error_code exists;
+            if (linkScript.empty() || !fs::is_regular_file(linkScript, exists) ||
+                !fs::is_regular_file(versionScript, exists))
+            {
+                DEKI_LOG_ERROR("Tactility backend: the app link scripts are missing from the "
+                               "deki-tactility-integration package (link/tactility-app-xtensa.ld, "
+                               "link/tactility-app.map)");
+                return false;
+            }
+        }
 
         // tactility.py reads this to build and package the app. One app, built
         // at the project root (a v3 manifest with a single app.0 block).
@@ -355,8 +462,10 @@ public:
               << "app.0.binary=" << appId << "\n";
         }
 
-        // tactility.py's own template, byte for byte: it rewrites any root
-        // CMakeLists whose first line is not its current version marker.
+        // tactility.py's own template: it rewrites any root CMakeLists whose
+        // first line is not its current version marker, and keeps one that
+        // has it. A device app adds its link script, which elf_loader's
+        // project_elf() puts on the link line from ELF_LIBS.
         {
             std::ofstream f(root / "CMakeLists.txt");
             f << "# tactility-cmakelists-version: 1\n"
@@ -368,26 +477,23 @@ public:
               << "\n"
               << "get_filename_component(TACTILITY_SDK_PATH \"$ENV{TACTILITY_SDK_PATH}\" ABSOLUTE)\n"
               << "include(\"${TACTILITY_SDK_PATH}/TactilitySDK.cmake\")\n"
-              << "\n"
-              << "tactility_project_pre(" << appId << ")\n"
+              << "\n";
+            if (!linkScript.empty())
+            {
+                f << "set(ELF_LIBS \"-Wl,-T," << linkScript << "\" \"-Wl,--version-script=" << versionScript
+                  << "\")\n\n";
+            }
+            f << "tactility_project_pre(" << appId << ")\n"
               << "project(" << appId << ")\n"
               << "tactility_project_post(" << appId << ")\n";
         }
 
-        if (TactilitySdk::IsPosix(platform))
+        if (posix)
         {
             return GenerateSimulatorComponent(projectPath, root, config, packageDefines);
         }
 
-        // A device app: the ESP-IDF component that would compile the game is
-        // not written yet, so this compiles nothing of it (see Build()).
-        {
-            std::ofstream f(root / "main" / "CMakeLists.txt");
-            f << "# Generated by the Deki Tactility builder. Do not edit.\n"
-              << "file(GLOB_RECURSE SOURCE_FILES CONFIGURE_DEPENDS Source/*.c*)\n"
-              << "tactility_component_register(SRCS ${SOURCE_FILES} INCLUDE_DIRS \"Include\")\n";
-        }
-        return true;
+        return GenerateDeviceComponent(projectPath, root, config, packageDefines);
     }
 
     // ---- build -------------------------------------------------------------
@@ -874,6 +980,270 @@ private:
         return CMakeGen::WriteIfChanged(root / "main" / "CMakeLists.txt", f.str());
     }
 
+    // The device app: the game as the ESP-IDF component elf_loader links into
+    // the relocatable ELF Tactility loads. The same sources as the ESP32
+    // firmware's main component, with two differences. It registers through
+    // the SDK's tactility_component_register(), which adds the SDK. And it
+    // does not define ESP32: that define selects the packages' ESP-IDF
+    // drivers, and on Tactility the OS owns the hardware, so they compile to
+    // the same stubs as on the desktop and the game reaches the hardware
+    // through this package's providers.
+    bool GenerateDeviceComponent(const std::string& projectPath, const fs::path& root, const PlatformConfig& config,
+                                 const std::vector<std::string>& packageDefines)
+    {
+        const std::string enginePath = ToCMakePath(EditorSettings::GetEnginePath());
+        if (enginePath.empty())
+        {
+            DEKI_LOG_ERROR("Tactility backend: the editor cannot find its engine sources");
+            return false;
+        }
+
+        const auto allPackages = CMakeGen::ScanPackageManifests(projectPath);
+
+        // The packages the platform always needs (this one), whether or not a
+        // scene names one of their components, as the firmware does.
+        std::vector<std::string> allDefines = packageDefines;
+        for (const auto& id : config.requiresPackages)
+        {
+            for (const auto& pkg : allPackages)
+            {
+                if ((pkg.id == id || pkg.dirName == id) && !pkg.buildDefine.empty() &&
+                    std::find(allDefines.begin(), allDefines.end(), pkg.buildDefine) == allDefines.end())
+                {
+                    allDefines.push_back(pkg.buildDefine);
+                }
+            }
+        }
+        const auto activeIds = CMakeGen::ResolveActivePackages(allPackages, allDefines, config.Capabilities());
+
+        std::string transformWhy;
+        const std::vector<std::string> transformDefines = CMakeGen::TransformDefines(
+            CMakeGen::ResolveProjectTransformWidth(allPackages, CMakeGen::ReadProjectTags(projectPath), &transformWhy));
+
+        const StripPlan strip = ComputeStripPlan(projectPath, config.id);
+        for (const auto& w : strip.warnings)
+        {
+            DEKI_LOG_WARNING("%s", w.c_str());
+        }
+
+        std::ostringstream f;
+        f << "# Generated by the Deki Tactility builder. Do not edit.\n"
+          << "# " << config.displayName << ": the game as the component elf_loader links into the app.\n\n";
+
+        // Registered first, with only the entry point, as in the firmware.
+        // ESP-IDF first runs this file as a script to collect requirements,
+        // and the register call ends that pass: everything after it (globs
+        // with CONFIGURE_DEPENDS, targets) is invalid in script mode. That
+        // script knows nothing of the project, so the SDK's CMake, which
+        // defines the register call, is included here too, as Tactility's own
+        // apps do.
+        f << "include(\"$ENV{TACTILITY_SDK_PATH}/TactilitySDK.cmake\")\n"
+          << "tactility_component_register(\n"
+          << "    SRCS \"" << enginePath << "/entry/Main.cpp\"\n"
+          << "    INCLUDE_DIRS \".\")\n\n";
+
+        // Absolute, and rewritten on every build: tactility.py runs the
+        // configure itself, so nothing can be passed on its command line.
+        f << "set(DEKI_PROJECT_PATH \"" << ToCMakePath(projectPath) << "\")\n"
+          << "set(DEKI_ENGINE_PATH \"" << enginePath << "\")\n\n";
+
+        CMakeGen::EmitEngineCoreSourceCollection(f);
+        f << "message(STATUS \"Deki stripping: " << CMakeGen::EscapeCMakeString(strip.summary) << "\")\n";
+        CMakeGen::EmitActivePackageSources(f, allPackages, activeIds, strip.SourceExcludeRegexes(),
+                                           strip.AnythingStripped());
+        CMakeGen::EmitGeneratedFileSources(f, enginePath, allPackages, activeIds);
+
+        const fs::path initPath = CMakeGen::GeneratePackageInitFile(root / "main", allPackages, activeIds,
+                                                                    fs::path(GetSourceDirectory(projectPath)));
+        f << "list(APPEND DEKI_ENGINE_SOURCES \"${CMAKE_CURRENT_LIST_DIR}/" << initPath.filename().string() << "\")\n";
+
+        CMakeGen::EmitProjectSourceCollection(f, "${DEKI_PROJECT_PATH}/src", /*excludePluginExports=*/true);
+
+        f << "\ntarget_sources(${COMPONENT_LIB} PRIVATE ${DEKI_ENGINE_SOURCES} ${PROJECT_SOURCES})\n";
+
+        // When something is stripped, the reflection tables the editor left in
+        // each package's generated/ (made with every feature present) would
+        // name components this build does not compile, so they are made again
+        // with the same exclusions, as the firmware does. The generator parses
+        // the package headers as a host program, under the configuration's
+        // defines only: DEKI_TACTILITY_TARGET would pull in the SDK's headers,
+        // which only the cross compiler can read, and no reflected type
+        // depends on it.
+        if (strip.AnythingStripped())
+        {
+            std::string dirs, tags, prefixes, outdirs;
+            for (const auto& pkg : allPackages)
+            {
+                if (activeIds.count(pkg.id) == 0 || pkg.packagePrefix.empty())
+                {
+                    continue;
+                }
+                dirs += " \"${DEKI_PROJECT_PATH}/packages/" + pkg.dirName + "\"";
+                tags += " \"" + pkg.dirName + "\"";
+                prefixes += " \"" + pkg.packagePrefix + "\"";
+                outdirs += " \"${CMAKE_BINARY_DIR}/refl/" + pkg.dirName + "/generated\"";
+            }
+            // Only a non-empty environment value: an empty normal variable
+            // would make the find_program below skip its search (CMP0125).
+            f << "\nif(NOT DEKI_GXX16 AND NOT \"$ENV{DEKI_GXX16}\" STREQUAL \"\")\n"
+                 "    set(DEKI_GXX16 \"$ENV{DEKI_GXX16}\")\nendif()\n"
+              << "if(NOT DEKI_GXX16)\n    find_program(DEKI_GXX16 NAMES g++-16 g++)\nendif()\n"
+              << "if(NOT DEKI_GXX16)\n"
+                 "    message(FATAL_ERROR \"Stripping regenerates the reflection tables and needs GCC 16.1+: set "
+                 "DEKI_GXX16, or turn stripping off in the Build panel.\")\n"
+                 "endif()\n"
+              << "include(\"${DEKI_ENGINE_PATH}/cmake/DekiReflectionCodegen.cmake\")\n"
+              << "deki_reflection_codegen(\n"
+              << "    UNIT_PREFIX \"tactility\"\n"
+              << "    PACKAGE_DIRS" << dirs << "\n"
+              << "    PACKAGE_TAGS" << tags << "\n"
+              << "    PACKAGE_PREFIXES" << prefixes << "\n"
+              << "    PACKAGE_OUTDIRS" << outdirs << "\n"
+              << "    GENERATOR_SRC \"${DEKI_ENGINE_PATH}/tools/reflection_codegen.cpp\" GXX \"${DEKI_GXX16}\"\n"
+              << "    INCLUDE_DIRS ${DEKI_PACKAGE_INCLUDE_DIRS} \"${DEKI_ENGINE_PATH}/include\" "
+                 "\"${DEKI_ENGINE_PATH}/third_party\" \"${DEKI_PROJECT_PATH}/packages\" \"${DEKI_PROJECT_PATH}/src\"\n";
+            const auto codegenExcludes = strip.CodegenExcludeRegexes();
+            if (!codegenExcludes.empty())
+            {
+                f << "    EXCLUDE_REGEX";
+                for (const auto& rx : codegenExcludes)
+                {
+                    f << " \"" << CMakeGen::EscapeCMakeString(rx) << "\"";
+                }
+                f << "\n";
+            }
+            f << "    DEFINES \"DEKI_FAST_ATTR=\"";
+            for (const auto& d : transformDefines)
+            {
+                f << " " << d;
+            }
+            for (const auto& d : allDefines)
+            {
+                f << " " << d;
+            }
+            f << ")\n"
+              << "set(_DEKI_GEN_SRCS \"\")\n"
+              << "foreach(_OUTDIR" << outdirs << ")\n"
+              << "    file(GLOB _g \"${_OUTDIR}/*.gen.cpp\")\n"
+              << "    list(APPEND _DEKI_GEN_SRCS ${_g})\n"
+              << "    get_filename_component(_REFL_DIR \"${_OUTDIR}\" DIRECTORY)\n"
+              << "    target_include_directories(${COMPONENT_LIB} PRIVATE \"${_REFL_DIR}\")\n"
+              << "endforeach()\n"
+              << "target_sources(${COMPONENT_LIB} PRIVATE ${_DEKI_GEN_SRCS})\n"
+              // Generate before compiling what is generated, or ninja may
+              // compile the last build's tables first.
+              << "foreach(_TAG" << tags << ")\n"
+              << "    string(MAKE_C_IDENTIFIER \"${_TAG}\" _RC_TAGID)\n"
+              << "    add_dependencies(${COMPONENT_LIB} ${DEKI_RC_TARGETS_${_RC_TAGID}})\n"
+              << "endforeach()\n";
+        }
+
+        CMakeGen::EmitIncludePaths(f, "${COMPONENT_LIB}", "${DEKI_PROJECT_PATH}/src");
+        CMakeGen::EmitPlatformDefines(f, "${COMPONENT_LIB}", config, allDefines);
+
+        f << "\nmessage(STATUS \"Deki transform: " << CMakeGen::EscapeCMakeString(transformWhy) << "\")\n"
+          << "target_compile_definitions(${COMPONENT_LIB} PRIVATE\n"
+          << "    DEKI_TACTILITY_TARGET\n"
+          // A relocated ELF has no IRAM placement to ask for, and no
+          // thread-local storage: elf_loader would leave it addressing the
+          // firmware's (deki/ThreadLocal.h).
+          << "    \"DEKI_FAST_ATTR=\"\n"
+          << "    DEKI_NO_THREAD_LOCAL\n"
+          << "    \"DEKI_SCREEN_WIDTH=" << config.screenWidth << "\"\n"
+          << "    \"DEKI_SCREEN_HEIGHT=" << config.screenHeight << "\"\n"
+          << "    \"" << CMakeGen::EscapeCMakeString("DEKI_TACTILITY_APP_ID=\"" + config.Option("appId") + "\"")
+          << "\"\n";
+        for (const auto& d : transformDefines)
+        {
+            f << "    " << d << "\n";
+        }
+        if (m_BuildOptions.enableLogging)
+        {
+            f << "    DEKI_LOG_ENABLED\n";
+        }
+        if (m_BuildOptions.enableInternalLogging)
+        {
+            f << "    DEKI_LOG_INTERNAL_ENABLED\n";
+        }
+        f << ")\n";
+
+        if (!config.cxxFlags.empty())
+        {
+            f << "target_compile_options(${COMPONENT_LIB} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:";
+            for (const auto& flag : config.cxxFlags)
+            {
+                if (flag.rfind("-std=", 0) != 0)
+                {
+                    f << " " << flag;
+                }
+            }
+            f << ">)\n";
+        }
+
+        return CMakeGen::WriteIfChanged(root / "main" / "CMakeLists.txt", f.str());
+    }
+
+    // The device app's imports against what Tactility exports to apps. An
+    // empty string when the app will load as far as its symbols go.
+    std::string CheckDeviceImports(const fs::path& elf, const std::string& platform, const BuildOutputCallback& out)
+    {
+        const ElfImports imports = ReadElfImports(elf);
+        if (!imports.error.empty())
+        {
+            return "could not read the app's ELF: " + imports.error;
+        }
+        if (!imports.exported.empty())
+        {
+            return "the app exports " + std::to_string(imports.exported.size()) + " symbol" +
+                   (imports.exported.size() == 1 ? "" : "s") + " (the first: " + imports.exported.front() +
+                   "); elf_loader would look them up in the firmware and refuse the app. The link's version "
+                   "script (link/tactility-app.map) should keep them local";
+        }
+        if (imports.hasTls)
+        {
+            return "the app has thread-local variables, which elf_loader cannot place; a thread_local in the "
+                   "game or a package must be an ordinary static on Tactility (DEKI_THREAD_LOCAL, "
+                   "deki/ThreadLocal.h)";
+        }
+
+        std::string exportsError;
+        const std::vector<std::string> exports = TactilitySdk::AppExports(platform, exportsError);
+        if (exports.empty())
+        {
+            // A check that cannot run is reported, not passed off as a pass.
+            Report(out, "Not checking the app's imports: " + exportsError, true);
+            return {};
+        }
+
+        std::vector<std::string> missing;
+        for (const auto& name : imports.undefined)
+        {
+            if (!std::binary_search(exports.begin(), exports.end(), name))
+            {
+                missing.push_back(name);
+            }
+        }
+        if (missing.empty())
+        {
+            Report(out,
+                   "All " + std::to_string(imports.undefined.size()) +
+                       " of the app's imports are exported by Tactility " + TactilityPin::kVersion,
+                   false);
+            return {};
+        }
+        std::sort(missing.begin(), missing.end());
+        missing.erase(std::unique(missing.begin(), missing.end()), missing.end());
+        for (const auto& name : missing)
+        {
+            Report(out, "  not exported by Tactility: " + name, true);
+        }
+        return std::to_string(missing.size()) + " function" + (missing.size() == 1 ? "" : "s") +
+               " the app calls " + (missing.size() == 1 ? "is" : "are") +
+               " not exported by Tactility, so the device would refuse to load it (listed above). "
+               "Keep the code that needs them out of a Tactility build, or define them in "
+               "deki-tactility-integration's TactilityLibc.c / TactilityLibcxx.cpp.";
+    }
+
     void Report(const BuildOutputCallback& out, const std::string& line, bool isError)
     {
         if (out)
@@ -892,21 +1262,123 @@ private:
         }
     }
 
+    /// The host GCC 16 the reflection generator runs on, for a device build
+    /// that regenerates it: DEKI_GXX16, else where MSYS2 puts it, as the
+    /// ESP32 builder looks. Empty when there is none; the build then says so.
+    static std::string HostGxx16()
+    {
+        if (const char* fromEnv = std::getenv("DEKI_GXX16"); fromEnv && *fromEnv)
+        {
+            return fromEnv;
+        }
+#ifdef _WIN32
+        std::error_code ec;
+        for (const char* candidate :
+             { "C:/msys64/mingw64/bin/g++.exe", "C:/mingw64/bin/g++.exe", "C:/MinGW/bin/g++.exe" })
+        {
+            if (fs::exists(candidate, ec))
+            {
+                return candidate;
+            }
+        }
+#endif
+        return {};
+    }
+
     // tactility.py, the pinned copy, run in the app directory with the SDK
     // it was built against. The simulator's compiler is the one its SDK was
-    // built with (TactilitySdk::Build finds it the same way).
+    // built with (TactilitySdk::Build finds it the same way); a device app
+    // builds in ESP-IDF's environment, at the version the SDK records.
     std::string ToolCommand(const fs::path& root, const std::string& args) const
     {
+        const bool device = !IsSimulator();
+#ifdef _WIN32
+        const fs::path script = root / "tactility-tool.bat";
+        std::ofstream f(script, std::ios::binary | std::ios::trunc);
+        f << "@echo off\r\n";
+        if (device)
+        {
+            // The reflection generator's compiler, and its directory on PATH:
+            // cc1plus finds its DLLs through PATH. Before the export, which
+            // puts ESP-IDF's own tools in front of it.
+            const std::string gxx = HostGxx16();
+            if (!gxx.empty())
+            {
+                std::string dir = fs::path(gxx).parent_path().string();
+                std::replace(dir.begin(), dir.end(), '/', '\\');
+                f << "set \"DEKI_GXX16=" << gxx << "\"\r\n"
+                  << "set \"PATH=%PATH%;" << dir << "\"\r\n";
+            }
+            f << TactilitySdk::IdfEnvironmentScript(IdfPath()) << "set \"ESP_IDF_VERSION=" << TactilityPin::kIdfMajorMinor
+              << "\"\r\n";
+        }
+        // UTF-8 out: tactility.py prints emoji status marks, which a pipe's
+        // default code page cannot encode, and Deploy() reads its "❌".
+        f << "set \"PYTHONUTF8=1\"\r\n"
+          << "set \"PYTHONIOENCODING=utf-8\"\r\n"
+          << "set \"TACTILITY_SDK_PATH=" << TactilitySdk::SdkBase() << "\"\r\n"
+          << "cd /d \"" << root.string() << "\" || exit /b 1\r\n"
+          << "python \"" << TactilitySdk::ToolDir() << "/tactility.py\" " << args << "\r\n";
+        return "call \"" + script.string() + "\"";
+#else
         const fs::path script = root / "tactility-tool.sh";
         std::ofstream f(script, std::ios::binary | std::ios::trunc);
-        f << "set -e\n"
-          << "unset ESP_IDF_VERSION IDF_PATH\n"
-          << "export CXX=$(command -v g++-16 || command -v g++)\n"
-          << "export CC=$(command -v gcc-16 || command -v gcc)\n"
-          << "export TACTILITY_SDK_PATH=\"" << TactilitySdk::SdkBase() << "\"\n"
+        f << "set -e\n";
+        if (device)
+        {
+            f << TactilitySdk::IdfEnvironmentScript(IdfPath()) << "export ESP_IDF_VERSION="
+              << TactilityPin::kIdfMajorMinor << "\n";
+        }
+        else
+        {
+            f << "unset ESP_IDF_VERSION IDF_PATH\n"
+              << "export CXX=$(command -v g++-16 || command -v g++)\n"
+              << "export CC=$(command -v gcc-16 || command -v gcc)\n";
+        }
+        f << "export TACTILITY_SDK_PATH=\"" << TactilitySdk::SdkBase() << "\"\n"
           << "cd \"" << root.string() << "\"\n"
           << "exec python3 \"" << TactilitySdk::ToolDir() << "/tactility.py\" " << args << "\n";
         return "sh \"" + script.string() + "\"";
+#endif
+    }
+
+    // What tactility.py would otherwise download from Tactility's CDN on a
+    // first build, from the pinned TactilityTool checkout: the app sdkconfig
+    // for the chip and the tool's own version record. tactility.py copies the
+    // sdkconfig over the app's on every build, so Deki's settings go into its
+    // copy here: the firmware's optimisation level, which the default (-Og)
+    // would cost a game several times over.
+    std::string StageToolFiles(const fs::path& root, const std::string& chip) const
+    {
+        const fs::path cdn = fs::path(TactilitySdk::ToolDir()) / "CDN";
+        const fs::path staged = root / ".tactility";
+        std::error_code ec;
+        fs::create_directories(staged, ec);
+
+        const std::string sdkconfigName = "sdkconfig.app." + chip;
+        std::ifstream in(cdn / sdkconfigName, std::ios::binary);
+        if (!in)
+        {
+            return "TactilityTool has no " + (cdn / sdkconfigName).string();
+        }
+        std::string sdkconfig((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        if (!sdkconfig.empty() && sdkconfig.back() != '\n')
+        {
+            sdkconfig += '\n';
+        }
+        sdkconfig += "# Added by the Deki Tactility builder\n"
+                     "CONFIG_COMPILER_OPTIMIZATION_PERF=y\n";
+        if (!CMakeGen::WriteIfChanged(staged / sdkconfigName, sdkconfig))
+        {
+            return "could not write " + (staged / sdkconfigName).string();
+        }
+
+        fs::copy_file(cdn / "tool.json", staged / "tool.json", fs::copy_options::overwrite_existing, ec);
+        if (ec)
+        {
+            return "could not copy TactilityTool's tool.json: " + ec.message();
+        }
+        return {};
     }
 
     void DoBuild(const std::string& projectPath, BuildOutputCallback out, BuildProgressCallback progress)
@@ -918,17 +1390,12 @@ private:
         }
 
         const std::string platform = SdkPlatformOf(m_PlatformConfig);
-        if (!TactilitySdk::IsPosix(platform))
-        {
-            // A failure, not a success with a caveat: the editor turns a
-            // completed build into "Firmware build succeeded".
-            return Fail(out, progress,
-                        "Tactility device apps cannot be built yet: compiling the game as an ESP-IDF "
-                        "component is not written. The simulator platform builds.");
-        }
 #ifdef _WIN32
-        return Fail(out, progress, "The Tactility simulator app builds on Linux only");
-#else
+        if (TactilitySdk::IsPosix(platform))
+        {
+            return Fail(out, progress, "The Tactility simulator app builds on Linux only");
+        }
+#endif
         const fs::path root = GetBuildDirectory(projectPath);
         const fs::path assets = root / "assets";
         std::error_code ec;
@@ -941,6 +1408,14 @@ private:
         {
             return Fail(out, progress,
                         "No boot payload and assets in " + assets.string() + "; build through the editor");
+        }
+
+        if (!TactilitySdk::IsPosix(platform))
+        {
+            if (const std::string error = StageToolFiles(root, platform); !error.empty())
+            {
+                return Fail(out, progress, error);
+            }
         }
 
         const int code = RunShellCommand(
@@ -968,13 +1443,27 @@ private:
             return Fail(out, progress, "tactility.py finished but " + app.string() + " is missing");
         }
 
+        // A device refuses to load an app that names a symbol its firmware
+        // does not export, and says so only in its own log. So the build says
+        // it first, with the names.
+        if (!TactilitySdk::IsPosix(platform))
+        {
+            const fs::path elf =
+                root / "build" / ("cmake-build-" + platform) / (m_PlatformConfig.Option("appId") + ".app.elf");
+            if (const std::string error = CheckDeviceImports(elf, platform, out); !error.empty())
+            {
+                std::error_code removeEc;
+                fs::remove(app, removeEc);  // not an app Tactility would load
+                return Fail(out, progress, error);
+            }
+        }
+
         Report(out, "Built " + app.string(), false);
         SetProgress(BuildState::Completed, "Built " + app.filename().string(), 1.0f);
         if (progress)
         {
             progress(GetProgress());
         }
-#endif
     }
 
     void DoDeploy(const std::string& projectPath, const std::string& host, BuildOutputCallback out,

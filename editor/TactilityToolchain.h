@@ -34,6 +34,7 @@
 #include <atomic>
 #include <functional>
 #include <string>
+#include <vector>
 
 namespace DekiEditor
 {
@@ -71,6 +72,18 @@ public:
 
     /// Whether `platform` is the simulator rather than a chip.
     static bool IsPosix(const std::string& platform);
+
+    /// Every symbol a device app may leave for the firmware to resolve: what
+    /// the kernel modules of the pinned Tactility export to apps, read from
+    /// its sources (Modules/, TactilityKernel/, the chip's platform; never a
+    /// board's drivers, which only some devices have). Cached beside the SDK.
+    /// Empty, with `error` set, when the sources are not there.
+    static std::vector<std::string> AppExports(const std::string& platform, std::string& error);
+
+    /// Script lines that enter `idfPath`'s ESP-IDF environment: a .bat
+    /// fragment on Windows, a sh fragment elsewhere. Ends in the ESP-IDF
+    /// directory; the caller cds where it needs to be.
+    static std::string IdfEnvironmentScript(const std::string& idfPath);
 
     /// Whether the SDK for this platform is built and the tool checked out.
     /// Each release script writes a known file last, so that file means

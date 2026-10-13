@@ -4,9 +4,13 @@
 #include <deki-editor/ShellCommand.h>
 
 #include <algorithm>
+#include <cctype>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <map>
+#include <utility>
 
 namespace fs = std::filesystem;
 
@@ -93,6 +97,311 @@ std::string PatchSimulator(const fs::path& src)
     return out ? std::string() : "could not write " + file.string();
 }
 
+// Reads one Tactility source line by line and collects the symbols its export
+// tables are sure to hold on one chip.
+//
+// Not a preprocessor, and not meant to be: it follows the #if nesting and
+// decides each condition three ways. The chip's own target macro
+// (CONFIG_IDF_TARGET_<CHIP>) and ESP_PLATFORM are known; a macro the file
+// itself #defines to 0 or 1 under known conditions is known; a defined() test
+// joined by || or && is worked out from those. Anything else (a board's
+// radios, TinyUSB, FreeRTOS options) is unknown, and an entry under an unknown
+// condition does not count: an app that leaned on it would load on some
+// devices and not others, so the build should say so instead.
+class ExportScan
+{
+public:
+    explicit ExportScan(std::string chip) : m_Chip(std::move(chip)) {}
+
+    void Line(std::string line, std::vector<std::string>& found)
+    {
+        if (!line.empty() && line.back() == '\r')
+        {
+            line.pop_back();
+        }
+        const size_t first = line.find_first_not_of(" \t");
+        if (first != std::string::npos && line[first] == '#')
+        {
+            Directive(line.substr(first + 1));
+            return;
+        }
+        if (!Active())
+        {
+            return;
+        }
+        Collect(line, found);
+    }
+
+private:
+    enum class Truth
+    {
+        False,
+        True,
+        Unknown
+    };
+
+    struct Branch
+    {
+        Truth current;  // whether the branch being read is compiled
+        Truth taken;    // whether any branch so far was
+    };
+
+    static bool IsIdent(char c) { return std::isalnum(static_cast<unsigned char>(c)) || c == '_'; }
+
+    static std::string Trim(const std::string& s)
+    {
+        const size_t b = s.find_first_not_of(" \t");
+        const size_t e = s.find_last_not_of(" \t");
+        return b == std::string::npos ? std::string() : s.substr(b, e - b + 1);
+    }
+
+    static Truth Not(Truth t)
+    {
+        return t == Truth::Unknown ? t : (t == Truth::True ? Truth::False : Truth::True);
+    }
+
+    bool Active() const
+    {
+        return std::all_of(m_Stack.begin(), m_Stack.end(), [](const Branch& b) { return b.current == Truth::True; });
+    }
+
+    Truth Defined(const std::string& name) const
+    {
+        if (name.rfind("CONFIG_IDF_TARGET_", 0) == 0)
+        {
+            return name == "CONFIG_IDF_TARGET_" + m_Chip ? Truth::True : Truth::False;
+        }
+        if (name == "ESP_PLATFORM")
+        {
+            return Truth::True;
+        }
+        return Truth::Unknown;
+    }
+
+    // One term: [!]defined(NAME), [!]defined NAME, or [!]NAME of a macro this
+    // file set to 0 or 1.
+    Truth Term(std::string term) const
+    {
+        term = Trim(term);
+        bool negate = false;
+        if (!term.empty() && term[0] == '!')
+        {
+            negate = true;
+            term = Trim(term.substr(1));
+        }
+        Truth value = Truth::Unknown;
+        if (term.rfind("defined", 0) == 0)
+        {
+            std::string name;
+            for (char c : term.substr(7))
+            {
+                if (IsIdent(c))
+                {
+                    name += c;
+                }
+                else if (!name.empty())
+                {
+                    break;
+                }
+            }
+            value = Defined(name);
+        }
+        else if (!term.empty() && std::all_of(term.begin(), term.end(), IsIdent))
+        {
+            const auto it = m_Defines.find(term);
+            if (it != m_Defines.end())
+            {
+                value = it->second ? Truth::True : Truth::False;
+            }
+        }
+        return negate ? Not(value) : value;
+    }
+
+    static std::vector<std::string> Split(const std::string& s, const std::string& op)
+    {
+        std::vector<std::string> parts;
+        size_t from = 0;
+        for (size_t at = s.find(op); at != std::string::npos; at = s.find(op, from))
+        {
+            parts.push_back(s.substr(from, at - from));
+            from = at + op.size();
+        }
+        parts.push_back(s.substr(from));
+        return parts;
+    }
+
+    Truth Condition(std::string expr) const
+    {
+        if (const size_t comment = expr.find("//"); comment != std::string::npos)
+        {
+            expr.resize(comment);
+        }
+        if (const size_t comment = expr.find("/*"); comment != std::string::npos)
+        {
+            expr.resize(comment);
+        }
+        expr = Trim(expr);
+        const bool hasOr = expr.find("||") != std::string::npos;
+        const bool hasAnd = expr.find("&&") != std::string::npos;
+        if (hasOr && hasAnd)
+        {
+            return Truth::Unknown;
+        }
+        if (hasOr || hasAnd)
+        {
+            bool anyTrue = false, anyFalse = false, anyUnknown = false;
+            for (const auto& part : Split(expr, hasOr ? "||" : "&&"))
+            {
+                const Truth t = Term(part);
+                anyTrue |= t == Truth::True;
+                anyFalse |= t == Truth::False;
+                anyUnknown |= t == Truth::Unknown;
+            }
+            if (hasOr)
+            {
+                return anyTrue ? Truth::True : (anyUnknown ? Truth::Unknown : Truth::False);
+            }
+            return anyFalse ? Truth::False : (anyUnknown ? Truth::Unknown : Truth::True);
+        }
+        return Term(expr);
+    }
+
+    void Directive(const std::string& text)
+    {
+        std::string body = Trim(text);
+        std::string word;
+        size_t p = 0;
+        while (p < body.size() && IsIdent(body[p]))
+        {
+            word += body[p++];
+        }
+        const std::string rest = body.substr(p);
+
+        if (word == "ifdef" || word == "ifndef")
+        {
+            const Truth t = Defined(Trim(rest));
+            const Truth v = word == "ifdef" ? t : Not(t);
+            m_Stack.push_back({ v, v });
+        }
+        else if (word == "if")
+        {
+            const Truth v = Condition(rest);
+            m_Stack.push_back({ v, v });
+        }
+        else if (word == "elif" && !m_Stack.empty())
+        {
+            Branch& b = m_Stack.back();
+            if (b.taken == Truth::True)
+            {
+                b.current = Truth::False;
+            }
+            else if (b.taken == Truth::False)
+            {
+                b.current = Condition(rest);
+                b.taken = b.current;
+            }
+            else
+            {
+                b.current = Truth::Unknown;
+            }
+        }
+        else if (word == "else" && !m_Stack.empty())
+        {
+            Branch& b = m_Stack.back();
+            b.current = Not(b.taken);
+            b.taken = Truth::True;
+        }
+        else if (word == "endif" && !m_Stack.empty())
+        {
+            m_Stack.pop_back();
+        }
+        else if (word == "define" && Active())
+        {
+            // #define NAME 0|1, the one form a condition later reads.
+            const std::string def = Trim(rest);
+            const size_t space = def.find_first_of(" \t");
+            if (space != std::string::npos)
+            {
+                const std::string value = Trim(def.substr(space));
+                if (value == "0" || value == "1")
+                {
+                    m_Defines[def.substr(0, space)] = value == "1";
+                }
+            }
+        }
+    }
+
+    static void Collect(const std::string& line, std::vector<std::string>& found)
+    {
+        for (size_t at = line.find("DEFINE_MODULE_SYMBOL"); at != std::string::npos;
+             at = line.find("DEFINE_MODULE_SYMBOL", at + 1))
+        {
+            size_t p = at + std::strlen("DEFINE_MODULE_SYMBOL");
+            const bool alias = line.compare(p, 6, "_ALIAS") == 0;
+            while (p < line.size() && line[p] != '(')
+            {
+                ++p;
+            }
+            if (p >= line.size())
+            {
+                continue;
+            }
+            ++p;
+            while (p < line.size() && std::isspace(static_cast<unsigned char>(line[p])))
+            {
+                ++p;
+            }
+            std::string name;
+            if (alias)
+            {
+                if (p < line.size() && line[p] == '"')
+                {
+                    const size_t close = line.find('"', p + 1);
+                    if (close != std::string::npos)
+                    {
+                        name = line.substr(p + 1, close - p - 1);
+                    }
+                }
+            }
+            else
+            {
+                while (p < line.size() && IsIdent(line[p]))
+                {
+                    name += line[p++];
+                }
+            }
+            if (!name.empty() && !std::isdigit(static_cast<unsigned char>(name[0])) && name != "symbol")
+            {
+                found.push_back(name);
+            }
+        }
+
+        // { "name", (void*)... }
+        for (size_t at = line.find("{ \""); at != std::string::npos; at = line.find("{ \"", at + 1))
+        {
+            const size_t close = line.find('"', at + 3);
+            if (close == std::string::npos)
+            {
+                break;
+            }
+            const std::string name = line.substr(at + 3, close - at - 3);
+            size_t p = close + 1;
+            while (p < line.size() && (line[p] == ' ' || line[p] == ','))
+            {
+                ++p;
+            }
+            if (!name.empty() && std::all_of(name.begin(), name.end(), IsIdent) && line.compare(p, 6, "(void*") == 0)
+            {
+                found.push_back(name);
+            }
+        }
+    }
+
+    std::string m_Chip;
+    std::vector<Branch> m_Stack;
+    std::map<std::string, bool> m_Defines;
+};
+
 std::string ReadFirstLine(const fs::path& file)
 {
     std::ifstream in(file);
@@ -134,6 +443,118 @@ std::string TactilitySdk::SdkDir(const std::string& platform)
 bool TactilitySdk::IsPosix(const std::string& platform)
 {
     return platform.rfind("posix-", 0) == 0;
+}
+
+std::vector<std::string> TactilitySdk::AppExports(const std::string& platform, std::string& error)
+{
+    std::vector<std::string> names;
+    std::error_code ec;
+    const fs::path cache = fs::path(SdkDir(platform)).parent_path() / "deki-app-exports-v2.txt";
+    if (fs::is_regular_file(cache, ec))
+    {
+        std::ifstream in(cache);
+        for (std::string line; std::getline(in, line);)
+        {
+            if (!line.empty() && line.back() == '\r')
+            {
+                line.pop_back();
+            }
+            if (!line.empty())
+            {
+                names.push_back(line);
+            }
+        }
+        if (!names.empty())
+        {
+            return names;
+        }
+    }
+
+    // A module's symbol table lists its entries with Tactility's macros
+    // (tactility/module.h), or as a literal { "name", (void*)... } pair:
+    //   DEFINE_MODULE_SYMBOL(name)
+    //   DEFINE_MODULE_SYMBOL_SIGNATURE(name, type)
+    //   DEFINE_MODULE_SYMBOL_ALIAS("name", symbol)
+    // An entry counts only where the preprocessor is sure to keep it for this
+    // chip (ExportScan): the tables leave out a chip's missing helpers and a
+    // board's absent radios behind #if.
+    const fs::path src = SourceDir();
+    const std::vector<fs::path> roots = { src / "Modules", src / "TactilityKernel" / "source",
+                                          src / "Platforms" / "platform-esp32" };
+    if (!fs::is_directory(src / "Modules", ec))
+    {
+        error = "the Tactility sources are not at " + Native(src.string());
+        return {};
+    }
+
+    std::string chip = platform;
+    std::transform(chip.begin(), chip.end(), chip.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+    std::vector<std::string> found;
+    for (const auto& root : roots)
+    {
+        if (!fs::is_directory(root, ec))
+        {
+            continue;
+        }
+        for (auto it = fs::recursive_directory_iterator(root, ec); !ec && it != fs::recursive_directory_iterator();
+             it.increment(ec))
+        {
+            const std::string ext = it->path().extension().string();
+            if (!it->is_regular_file(ec) || (ext != ".c" && ext != ".cpp"))
+            {
+                continue;
+            }
+            std::ifstream in(it->path(), std::ios::binary);
+            ExportScan scan(chip);
+            for (std::string line; std::getline(in, line);)
+            {
+                scan.Line(line, found);
+            }
+        }
+    }
+    std::sort(found.begin(), found.end());
+    found.erase(std::unique(found.begin(), found.end()), found.end());
+    if (found.empty())
+    {
+        error = "no exported symbols found in the Tactility sources at " + Native(src.string());
+        return {};
+    }
+
+    fs::create_directories(cache.parent_path(), ec);
+    std::ofstream out(cache, std::ios::binary | std::ios::trunc);
+    for (const auto& name : found)
+    {
+        out << name << "\n";
+    }
+    return found;
+}
+
+std::string TactilitySdk::IdfEnvironmentScript(const std::string& idfPath)
+{
+#ifdef _WIN32
+    // MSYSTEM cleared: ESP-IDF's scripts refuse to run when it is set, and
+    // exit 0 while doing so. export.bat by full path: a bare name after a cd
+    // fails under NoDefaultCurrentDirectoryInExePath.
+    //
+    // The editor's own Python goes first when it has one. export.bat picks its
+    // virtual environment by the version of the first python on PATH, and the
+    // environment ESP-IDF installed was made with the editor's; a newer system
+    // Python makes it look for one that does not exist and stop.
+    std::string lines = "set \"MSYSTEM=\"\r\n";
+    const fs::path python = fs::path(EditorPaths::GetToolchainsDir()) / "espressif" / "python" / "tools";
+    std::error_code ec;
+    if (fs::is_regular_file(python / "python.exe", ec))
+    {
+        lines += "set \"PATH=" + Native(python.string()) + ";" + Native((python / "Scripts").string()) +
+                 ";%PATH%\"\r\n";
+    }
+    lines += "cd /d \"" + Native(idfPath) + "\" || exit /b 1\r\n";
+    lines += "call \"" + Native(idfPath) + "\\export.bat\" || exit /b 1\r\n";
+    return lines;
+#else
+    return ". \"" + idfPath + "/export.sh\"\n";
+#endif
 }
 
 bool TactilitySdk::IsBuilt(const std::string& platform)
@@ -305,14 +726,8 @@ std::string TactilitySdk::Build(const std::string& platform, const std::string& 
 #ifdef _WIN32
         script = fs::path(Root()) / ("build-sdk-" + platform + ".bat");
         std::ofstream f(script, std::ios::binary | std::ios::trunc);
-        // MSYSTEM cleared: ESP-IDF's scripts refuse to run when it is set, and
-        // exit 0 while doing so. export.bat by full path: a bare name after a
-        // cd fails under NoDefaultCurrentDirectoryInExePath.
         f << "@echo off\r\n"
-          << "set \"MSYSTEM=\"\r\n"
-          << "cd /d \"" << Native(idfPath) << "\" || exit /b 1\r\n"
-          << "call \"" << Native(idfPath) << "\\export.bat\" || exit /b 1\r\n"
-          << "cd /d \"" << Native(src.string()) << "\" || exit /b 1\r\n"
+          << IdfEnvironmentScript(idfPath) << "cd /d \"" << Native(src.string()) << "\" || exit /b 1\r\n"
           << "python device.py " << device << " || exit /b 1\r\n"
           << "idf.py build || exit /b 1\r\n"
           << "set \"ESP_IDF_VERSION=" << TactilityPin::kIdfMajorMinor << "\"\r\n"
@@ -322,8 +737,7 @@ std::string TactilitySdk::Build(const std::string& platform, const std::string& 
         script = fs::path(Root()) / ("build-sdk-" + platform + ".sh");
         std::ofstream f(script, std::ios::binary | std::ios::trunc);
         f << "set -e\n"
-          << ". \"" << idfPath << "/export.sh\"\n"
-          << "cd \"" << src.string() << "\"\n"
+          << IdfEnvironmentScript(idfPath) << "cd \"" << src.string() << "\"\n"
           << "python device.py " << device << "\n"
           << "idf.py build\n"
           << "export ESP_IDF_VERSION=" << TactilityPin::kIdfMajorMinor << "\n"

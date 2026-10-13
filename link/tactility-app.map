@@ -1,0 +1,13 @@
+/* What a Tactility device app exports: nothing.
+ *
+ * elf_loader resolves every symbol a relocation names through Tactility's
+ * export tables, even one the app defines itself; it never looks in the app.
+ * Anything the app exports (a template instantiated from libstdc++'s headers,
+ * which are default visibility; a package class marked for export to the
+ * editor's DLLs) is referred to by name, and the load fails with "Can't find
+ * common <name>". Kept local, those references are plain relative addresses.
+ * The loader starts the app at the ELF's entry address, not by symbol.
+ */
+{
+    local: *;
+};
