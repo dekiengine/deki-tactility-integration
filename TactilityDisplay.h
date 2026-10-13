@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
 
 #include <deki/Engine.h>  // ColorFormat
 #include <deki/providers/IDisplay.h>
@@ -30,6 +31,13 @@ namespace DekiTactility
 /// the engine put it (usually PSRAM) and is copied out in `kBandRows`-row
 /// bands through a small internal staging buffer, as LovyanGFXDisplay does.
 /// A panel with PREFER_EXTERNAL_RAM gets the engine's rows directly.
+///
+/// Why a present task: Tactility's `display_draw_bitmap()` returns only once
+/// the panel has the pixels, so sending a frame from the game loop stalls it
+/// for the whole transfer (about 20 ms for 320x240 at the T-Deck's 62.5 MHz).
+/// On a dual-core chip the changed rows are copied into one of two frame
+/// copies in external memory, and a task on the other core sends them while
+/// the engine draws the next frame, as LovyanGFXDisplay does on firmware.
 class TactilityDisplay : public Deki::IDisplay
 {
 public:
@@ -72,10 +80,22 @@ private:
     void PushRect(const uint8_t* framebuffer, int fbWidth, Deki::ColorFormat format, int32_t x0, int32_t y0, int32_t x1,
                   int32_t y1);
 
-    /// Rows staged per draw_bitmap call. 8, as in LovyanGFXDisplay, keeps the
-    /// staging buffer small (320 px * 8 rows * 2 B = 5 KB) while spreading the
-    /// driver's per-call cost.
-    static constexpr int32_t kBandRows = 8;
+    /// Starts the present task and its two frame copies. False, and frames are
+    /// sent as they are drawn, on a single-core chip or without the memory.
+    bool StartAsyncPresent();
+    /// Waits until the task has sent everything queued. Anything that uses
+    /// the panel from the game loop's side calls it first.
+    void WaitForAsyncPresent();
+    void StopAsyncPresent();
+    /// Copies the rows `rects` cover into a free frame copy and queues it.
+    /// count < 0 means the whole frame.
+    void QueueFrame(const uint8_t* framebuffer, int width, int height, const Deki::Rect* rects, int32_t count);
+    static void PresentTaskMain(void* self);
+
+    /// Rows staged per draw_bitmap call: 24 (320 px * 24 rows * 2 B = 15 KB of
+    /// internal RAM). Each call waits for its transfer and pays the driver's
+    /// fixed cost, so fewer, larger bands send a frame sooner.
+    static constexpr int32_t kBandRows = 24;
 
     struct Device* m_Device = nullptr;
     bool m_Initialized = false;
@@ -97,6 +117,21 @@ private:
 
     /// Draws the panel has refused, for the log.
     uint32_t m_DrawFailures = 0;
+
+    /// A frame copy waiting for, or being sent by, the present task.
+    struct QueuedFrame
+    {
+        uint8_t* pixels = nullptr;
+        int width = 0;
+        int height = 0;
+        std::vector<Deki::Rect> rects;  // what changed; only these are sent
+    };
+    bool m_AsyncPresent = false;
+    QueuedFrame m_Frames[2];
+    int m_NextFrame = 0;
+    void* m_PresentTask = nullptr;  // TaskHandle_t
+    void* m_FrameReady = nullptr;   // QueueHandle_t of frame indices
+    void* m_FreeFrames = nullptr;   // counting SemaphoreHandle_t: 2 when idle
 };
 
 }  // namespace DekiTactility

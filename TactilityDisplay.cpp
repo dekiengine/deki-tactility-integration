@@ -16,6 +16,19 @@ extern "C"
 }
 #endif
 
+// The present task runs on a device only: the simulator's FreeRTOS is a POSIX
+// port with no second core to send frames from.
+#if defined(DEKI_TACTILITY_TARGET) && defined(ESP_PLATFORM)
+#define DEKI_TACTILITY_ASYNC_PRESENT 1
+#include <esp_timer.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+#include <freertos/semphr.h>
+#include <freertos/task.h>
+#else
+#define DEKI_TACTILITY_ASYNC_PRESENT 0
+#endif
+
 namespace DekiTactility
 {
 
@@ -28,6 +41,13 @@ namespace
 /// boards the display shares its bus with the SD card, so the lock can be held
 /// for a while; dropping one band is better than blocking the game loop.
 constexpr uint32_t kLockTimeoutTicks = 100;
+
+// PROBE (temporary): frame timing.
+int64_t g_ProbeStart = 0;
+int64_t g_ProbeWaitUs = 0;
+int64_t g_ProbeCopyUs = 0;
+volatile int64_t g_ProbeSendUs = 0;
+uint32_t g_ProbeFrames = 0;
 
 /// Maps the panel's own format to the engine's. Returns false for formats Deki
 /// has no equivalent for: MONOCHROME and GRAYSCALE8 (e-paper, some OLEDs)
@@ -146,13 +166,225 @@ bool TactilityDisplay::Initialize(int32_t width, int32_t height)
     display_clear(m_Device);
 
     m_Initialized = true;
-    DEKI_LOG_INFO("TactilityDisplay: %dx%d, format %d, staging=%s", (int)m_DisplayWidth, (int)m_DisplayHeight,
-                  (int)panelFormat, m_Band ? "yes" : "direct");
+    const bool async = StartAsyncPresent();
+    DEKI_LOG_INFO("TactilityDisplay: %dx%d, format %d, staging=%s, frames sent %s", (int)m_DisplayWidth,
+                  (int)m_DisplayHeight, (int)panelFormat, m_Band ? "yes" : "direct",
+                  async ? "from the other core" : "as drawn");
     return true;
+}
+
+bool TactilityDisplay::StartAsyncPresent()
+{
+#if DEKI_TACTILITY_ASYNC_PRESENT && !defined(CONFIG_FREERTOS_UNICORE)
+    const size_t bytes = Deki::FrameBufferBytes(m_PanelFormat, m_DisplayWidth, m_DisplayHeight);
+    for (QueuedFrame& frame : m_Frames)
+    {
+        frame.pixels = static_cast<uint8_t*>(Deki::Memory::Allocate(bytes, Deki::Memory::External));
+        frame.rects.reserve(16);
+    }
+    // Two frames, plus one give for the task's goodbye (StopAsyncPresent).
+    m_FreeFrames = xSemaphoreCreateCounting(3, 2);
+    m_FrameReady = xQueueCreate(2, sizeof(int));
+    if (m_Frames[0].pixels == nullptr || m_Frames[1].pixels == nullptr || m_FreeFrames == nullptr ||
+        m_FrameReady == nullptr)
+    {
+        DEKI_LOG_WARNING("TactilityDisplay: no memory for two %u-byte frame copies; frames are sent as they are drawn",
+                         (unsigned)bytes);
+        StopAsyncPresent();
+        return false;
+    }
+
+    // The other core from the one the game runs on. Above the game's priority,
+    // so a frame starts going out as soon as it is queued.
+    const BaseType_t core = xPortGetCoreID() == 0 ? 1 : 0;
+    TaskHandle_t task = nullptr;
+    if (xTaskCreatePinnedToCore(&PresentTaskMain, "deki_present", 4096, this, uxTaskPriorityGet(nullptr) + 1, &task,
+                                core) != pdPASS)
+    {
+        DEKI_LOG_WARNING("TactilityDisplay: could not start the present task; frames are sent as they are drawn");
+        StopAsyncPresent();
+        return false;
+    }
+    m_PresentTask = task;
+    m_AsyncPresent = true;
+    return true;
+#else
+    return false;
+#endif
+}
+
+void TactilityDisplay::PresentTaskMain(void* arg)
+{
+#if DEKI_TACTILITY_ASYNC_PRESENT
+    auto* self = static_cast<TactilityDisplay*>(arg);
+    auto* ready = static_cast<QueueHandle_t>(self->m_FrameReady);
+    auto* free = static_cast<SemaphoreHandle_t>(self->m_FreeFrames);
+    uint32_t frames = 0;
+    for (;;)
+    {
+        int index = 0;
+        xQueueReceive(ready, &index, portMAX_DELAY);
+        if (index < 0)
+        {
+            // StopAsyncPresent: say so, then go. Nothing here touches the
+            // display again.
+            xSemaphoreGive(free);
+            vTaskDelete(nullptr);
+            return;
+        }
+        const QueuedFrame& frame = self->m_Frames[index];
+        const int64_t sendStart = esp_timer_get_time();
+        for (const Deki::Rect& r : frame.rects)
+        {
+            self->PushRect(frame.pixels, frame.width, self->m_PanelFormat, r.left, r.top, r.right, r.bottom);
+        }
+        g_ProbeSendUs += esp_timer_get_time() - sendStart;
+        xSemaphoreGive(free);
+
+        // At full speed the next frame is always waiting and this task never
+        // blocks, so the core's idle task never runs and the task watchdog
+        // reports it. A tick's pause every 30 frames lets it.
+        if (++frames % 30 == 0)
+        {
+            vTaskDelay(1);
+        }
+    }
+#else
+    (void)arg;
+#endif
+}
+
+void TactilityDisplay::QueueFrame(const uint8_t* framebuffer, int width, int height, const Deki::Rect* rects,
+                                  int32_t count)
+{
+#if DEKI_TACTILITY_ASYNC_PRESENT
+    // Waits only while both copies are queued or being sent.
+    const int64_t waitStart = esp_timer_get_time();
+    xSemaphoreTake(static_cast<SemaphoreHandle_t>(m_FreeFrames), portMAX_DELAY);
+    const int64_t copyStart = esp_timer_get_time();
+    g_ProbeWaitUs += copyStart - waitStart;
+    const int index = m_NextFrame;
+    m_NextFrame = 1 - m_NextFrame;
+    QueuedFrame& frame = m_Frames[index];
+    frame.width = width;
+    frame.height = height;
+    frame.rects.clear();
+
+    const size_t stride = Deki::FrameBufferBytes(m_PanelFormat, width, 1);
+    if (count < 0)
+    {
+        frame.rects.push_back({ 0, 0, width, height });
+        std::memcpy(frame.pixels, framebuffer, stride * (size_t)height);
+    }
+    else
+    {
+        // Only the rows something changed in are copied: the task sends only
+        // the rects, so the rest of the copy is never read.
+        for (int32_t i = 0; i < count; ++i)
+        {
+            Deki::Rect r = rects[i];
+            r.top = r.top < 0 ? 0 : r.top;
+            r.bottom = r.bottom > height ? height : r.bottom;
+            if (r.bottom <= r.top || r.right <= r.left)
+            {
+                continue;
+            }
+            frame.rects.push_back(r);
+            std::memcpy(frame.pixels + (size_t)r.top * stride, framebuffer + (size_t)r.top * stride,
+                        stride * (size_t)(r.bottom - r.top));
+        }
+    }
+    g_ProbeCopyUs += esp_timer_get_time() - copyStart;
+    xQueueSend(static_cast<QueueHandle_t>(m_FrameReady), &index, portMAX_DELAY);
+
+    // PROBE (temporary): where each frame's time goes, every 2 s.
+    if (g_ProbeStart == 0)
+    {
+        g_ProbeStart = waitStart;
+    }
+    ++g_ProbeFrames;
+    if (waitStart - g_ProbeStart >= 2000000)
+    {
+        const double n = (double)g_ProbeFrames;
+        DEKI_LOG_INFO("PROBE fps=%.1f frame=%.2fms wait=%.2fms copy=%.2fms send=%.2fms rects=%d",
+                      n * 1e6 / (double)(waitStart - g_ProbeStart), (double)(waitStart - g_ProbeStart) / n / 1000.0,
+                      (double)g_ProbeWaitUs / n / 1000.0, (double)g_ProbeCopyUs / n / 1000.0,
+                      (double)g_ProbeSendUs / n / 1000.0, (int)frame.rects.size());
+        g_ProbeStart = waitStart;
+        g_ProbeFrames = 0;
+        g_ProbeWaitUs = g_ProbeCopyUs = 0;
+        g_ProbeSendUs = 0;
+    }
+#else
+    (void)framebuffer;
+    (void)width;
+    (void)height;
+    (void)rects;
+    (void)count;
+#endif
+}
+
+void TactilityDisplay::WaitForAsyncPresent()
+{
+#if DEKI_TACTILITY_ASYNC_PRESENT
+    if (!m_AsyncPresent)
+    {
+        return;
+    }
+    // Both copies free: nothing queued or being sent.
+    auto* free = static_cast<SemaphoreHandle_t>(m_FreeFrames);
+    xSemaphoreTake(free, portMAX_DELAY);
+    xSemaphoreTake(free, portMAX_DELAY);
+    xSemaphoreGive(free);
+    xSemaphoreGive(free);
+#endif
+}
+
+void TactilityDisplay::StopAsyncPresent()
+{
+#if DEKI_TACTILITY_ASYNC_PRESENT
+    if (m_PresentTask != nullptr)
+    {
+        WaitForAsyncPresent();
+        auto* free = static_cast<SemaphoreHandle_t>(m_FreeFrames);
+        // Hold both copies, so the only give left is the task's goodbye.
+        xSemaphoreTake(free, portMAX_DELAY);
+        xSemaphoreTake(free, portMAX_DELAY);
+        const int stop = -1;
+        xQueueSend(static_cast<QueueHandle_t>(m_FrameReady), &stop, portMAX_DELAY);
+        xSemaphoreTake(free, portMAX_DELAY);
+        // The give returns before the task has deleted itself; let it finish
+        // before its queue and semaphore go.
+        vTaskDelay(2);
+        m_PresentTask = nullptr;
+    }
+    if (m_FrameReady != nullptr)
+    {
+        vQueueDelete(static_cast<QueueHandle_t>(m_FrameReady));
+        m_FrameReady = nullptr;
+    }
+    if (m_FreeFrames != nullptr)
+    {
+        vSemaphoreDelete(static_cast<SemaphoreHandle_t>(m_FreeFrames));
+        m_FreeFrames = nullptr;
+    }
+    for (QueuedFrame& frame : m_Frames)
+    {
+        if (frame.pixels != nullptr)
+        {
+            Deki::Memory::Free(frame.pixels);
+            frame.pixels = nullptr;
+        }
+    }
+    m_AsyncPresent = false;
+#endif
 }
 
 void TactilityDisplay::Shutdown()
 {
+    // The task uses the band and the device: it stops first.
+    StopAsyncPresent();
+
     if (m_Band != nullptr)
     {
         Deki::Memory::Free(m_Band);
@@ -186,6 +418,12 @@ void TactilityDisplay::Present(const uint8_t* framebuffer, int width, int height
     {
         return;
     }
+    if (m_AsyncPresent && format == m_PanelFormat)
+    {
+        QueueFrame(framebuffer, width, height, nullptr, -1);
+        return;
+    }
+    WaitForAsyncPresent();
     PushRect(framebuffer, width, format, 0, 0, width, height);
 }
 
@@ -209,6 +447,13 @@ void TactilityDisplay::PresentRegions(const uint8_t* framebuffer, int width, int
         Present(framebuffer, width, height, format);
         return;
     }
+
+    if (m_AsyncPresent && format == m_PanelFormat)
+    {
+        QueueFrame(framebuffer, width, height, rects, count);
+        return;
+    }
+    WaitForAsyncPresent();
 
     // Deki::Rect is {left, top, right, bottom} and half-open, as
     // display_draw_bitmap() wants (its end coordinates are exclusive too), so
@@ -356,6 +601,7 @@ void TactilityDisplay::RequestFullRefresh()
     }
     // Meaningful on e-paper, where it clears accumulated ghosting; the driver
     // reports ERROR_NOT_SUPPORTED on panels that have no such operation.
+    WaitForAsyncPresent();
     display_refresh(m_Device);
 }
 
