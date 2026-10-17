@@ -25,14 +25,19 @@
 var NAVTREE =
 [
   [ "deki-tactility-integration", "index.html", [
-    [ "Components", "index.html#autotoc_md0", null ],
-    [ "Feature flags", "index.html#autotoc_md1", null ],
-    [ "Component reference", "index.html#autotoc_md2", [
+    [ "Components", "index.html#components", null ],
+    [ "Feature flags", "index.html#feature-flags", null ],
+    [ "Component reference", "index.html#component-reference", [
       [ "TactilityDisplaySetup", "index.html#c-tactilitydisplaysetup", null ],
       [ "TactilityInputSetup", "index.html#c-tactilityinputsetup", null ]
     ] ],
-    [ "Changelog", "index.html#autotoc_md3", [
-      [ "0.17.0", "index.html#autotoc_md4", null ]
+    [ "Changelog", "index.html#changelog", [
+      [ "0.19.0", "index.html#autotoc_md0", null ],
+      [ "Changed", "index.html#autotoc_md1", null ],
+      [ "Added", "index.html#autotoc_md2", null ],
+      [ "0.18.0", "index.html#autotoc_md3", null ],
+      [ "Changed", "index.html#autotoc_md4", null ],
+      [ "Fixed", "index.html#autotoc_md5", null ]
     ] ]
   ] ]
 ];
