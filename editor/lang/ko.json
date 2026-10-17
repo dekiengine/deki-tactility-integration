@@ -8,5 +8,8 @@
     "Tactility Display Setup": "Tactility 디스플레이 설정",
     "Tactility Input Setup": "Tactility 입력 설정",
     "The Tactility simulator, built from Tactility's sources at the pinned commit and packaged as an SDK, plus TactilityTool's app build tool. Takes a while.": "Tactility 시뮬레이터입니다. 고정된 커밋의 Tactility 소스에서 빌드해 SDK로 묶고, TactilityTool의 앱 빌드 도구를 더합니다. 시간이 걸립니다.",
-    "Window": "창"
+    "Window": "창",
+    "Feeds Tactility's touch and keyboard into Deki's input system.": "Tactility의 터치와 키보드 입력을 Deki의 입력 시스템에 전달합니다.",
+    "Gives the game Tactility's display: the whole panel, or a window with the OS still running.": "게임에 Tactility의 디스플레이를 제공합니다. 패널 전체를 쓰거나, OS가 계속 실행되는 상태에서 창 하나를 씁니다.",
+    "Tactility": "Tactility"
 }

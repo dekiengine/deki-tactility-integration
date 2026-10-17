@@ -8,5 +8,8 @@
     "Tactility Display Setup": "Tactility 显示屏设置",
     "Tactility Input Setup": "Tactility 输入设置",
     "The Tactility simulator, built from Tactility's sources at the pinned commit and packaged as an SDK, plus TactilityTool's app build tool. Takes a while.": "Tactility 模拟器，从固定提交的 Tactility 源码构建并打包为 SDK，并加上 TactilityTool 的应用构建工具。耗时较长。",
-    "Window": "窗口"
+    "Window": "窗口",
+    "Feeds Tactility's touch and keyboard into Deki's input system.": "将 Tactility 的触摸和键盘输入传入 Deki 的输入系统。",
+    "Gives the game Tactility's display: the whole panel, or a window with the OS still running.": "为游戏提供 Tactility 的显示屏：整个面板，或在系统仍运行时的一个窗口。",
+    "Tactility": "Tactility"
 }
