@@ -32,6 +32,7 @@
 #include <deki-editor/EditorPaths.h>
 #include <deki-editor/EditorSettings.h>
 #include <deki-editor/FeatureResolver.h>
+#include <deki-editor/Localization.h>
 #include <deki-editor/Paths.h>
 #include <deki-editor/ShellCommand.h>
 #include <deki/LogSystem.h>
@@ -203,7 +204,7 @@ public:
     std::string GetFrameworkId() const override { return "tactility"; }
     const char* GetDescription() const override
     {
-        return "Build as a loadable app for a device running Tactility, or for its simulator";
+        return TrMark("Build as a loadable app for a device running Tactility, or for its simulator");
     }
 
     std::vector<std::string> ValidatePlatform(const PlatformConfig& config) const override
@@ -515,11 +516,11 @@ public:
             sdk.status = ToolchainComponentStatus::NotInstalled;
         }
         sdk.tooltip = TactilitySdk::IsPosix(platform)
-                          ? "The Tactility simulator, built from Tactility's sources at the pinned commit and "
-                            "packaged as an SDK, plus TactilityTool's app build tool. Takes a while."
-                          : "Built from Tactility's sources at the pinned commit (0.8 has no published SDK "
-                            "yet), plus TactilityTool's app build tool and configuration. Needs the ESP-IDF "
-                            "SDK first; takes a while.";
+                          ? TrMark("The Tactility simulator, built from Tactility's sources at the pinned commit and "
+                                   "packaged as an SDK, plus TactilityTool's app build tool. Takes a while.")
+                          : TrMark("Built from Tactility's sources at the pinned commit (0.8 has no published SDK "
+                                   "yet), plus TactilityTool's app build tool and configuration. Needs the ESP-IDF "
+                                   "SDK first; takes a while.");
         components.push_back(sdk);
         return components;
     }
@@ -1170,8 +1171,8 @@ private:
         {
             Report(out, "  not exported by Tactility: " + name, true);
         }
-        return std::to_string(missing.size()) + " function" + (missing.size() == 1 ? "" : "s") +
-               " the app calls " + (missing.size() == 1 ? "is" : "are") +
+        return std::to_string(missing.size()) + " function" + (missing.size() == 1 ? "" : "s") + " the app calls " +
+               (missing.size() == 1 ? "is" : "are") +
                " not exported by Tactility, so the device would refuse to load it (listed above). "
                "Keep the code that needs them out of a Tactility build, or define them in "
                "deki-tactility-integration's TactilityLibc.c / TactilityLibcxx.cpp.";
@@ -1242,8 +1243,8 @@ private:
                 f << "set \"DEKI_GXX16=" << gxx << "\"\r\n"
                   << "set \"PATH=%PATH%;" << dir << "\"\r\n";
             }
-            f << TactilitySdk::IdfEnvironmentScript(IdfPath()) << "set \"ESP_IDF_VERSION=" << TactilityPin::kIdfMajorMinor
-              << "\"\r\n";
+            f << TactilitySdk::IdfEnvironmentScript(IdfPath())
+              << "set \"ESP_IDF_VERSION=" << TactilityPin::kIdfMajorMinor << "\"\r\n";
         }
         // UTF-8 out: tactility.py prints emoji status marks, which a pipe's
         // default code page cannot encode, and Deploy() reads its "❌".
@@ -1259,8 +1260,8 @@ private:
         f << "set -e\n";
         if (device)
         {
-            f << TactilitySdk::IdfEnvironmentScript(IdfPath()) << "export ESP_IDF_VERSION="
-              << TactilityPin::kIdfMajorMinor << "\n";
+            f << TactilitySdk::IdfEnvironmentScript(IdfPath())
+              << "export ESP_IDF_VERSION=" << TactilityPin::kIdfMajorMinor << "\n";
         }
         else
         {

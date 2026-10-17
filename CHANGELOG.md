@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Japanese: `editor/lang/ja.json` translates the names, tooltips and enum
+  values this package's components show in the Inspector.
+- The package's editor text goes through the editor's translation (`Tr`), so
+  it shows in the editor's language. Needs the editor release that adds
+  `Localization.h`; raise `minEngine` to it when releasing.
+
 ## 0.18.0
 
 ### Changed

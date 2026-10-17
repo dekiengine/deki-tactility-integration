@@ -1,0 +1,12 @@
+{
+    "Build as a loadable app for a device running Tactility, or for its simulator": "Tactility を実行するデバイス、またはそのシミュレーター向けに、読み込んで使うアプリとしてビルドします",
+    "Built from Tactility's sources at the pinned commit (0.8 has no published SDK yet), plus TactilityTool's app build tool and configuration. Needs the ESP-IDF SDK first; takes a while.": "固定されたコミットの Tactility のソースからビルドし、TactilityTool のアプリビルドツールと構成を加えます (0.8 には公開された SDK がまだありません)。先に ESP-IDF SDK が必要です。時間がかかります。",
+    "Espressif IoT Development Framework (shared with the ESP32 package)": "Espressif の IoT 開発フレームワーク (ESP32 パッケージと共有)",
+    "Mode": "モード",
+    "Panel": "パネル",
+    "Panel takes the whole display over and stops LVGL, so the game owns every pixel. Window runs the game in an app window with LVGL and the OS still running around it, at the platform's screen size.": "パネルはディスプレイ全体を使い、LVGL を止めるので、すべてのピクセルをゲームが扱います。ウィンドウは LVGL と OS を動かしたまま、アプリのウィンドウの中でプラットフォームの画面サイズでゲームを実行します。",
+    "Tactility Display Setup": "Tactility ディスプレイセットアップ",
+    "Tactility Input Setup": "Tactility 入力セットアップ",
+    "The Tactility simulator, built from Tactility's sources at the pinned commit and packaged as an SDK, plus TactilityTool's app build tool. Takes a while.": "Tactility シミュレーターです。固定されたコミットの Tactility のソースからビルドして SDK にまとめ、TactilityTool のアプリビルドツールを加えます。時間がかかります。",
+    "Window": "ウィンドウ"
+}

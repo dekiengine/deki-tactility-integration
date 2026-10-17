@@ -13,6 +13,8 @@
 // The TactilitySDK is not here: 0.8 has no published archive, so it is built
 // from source (TactilityToolchain.h).
 
+#include <deki-editor/Localization.h>
+
 namespace DekiEditor
 {
 
@@ -52,5 +54,11 @@ inline constexpr const char* kTactilityToolchainDefinition = R"json(
   ]
 }
 )json";
+
+// The tooltip above, marked so the translation table has it. The Platforms
+// panel shows it through Tr().
+[[maybe_unused]] inline constexpr const char* kTactilityToolchainTooltips[] = {
+    TrMark("Espressif IoT Development Framework (shared with the ESP32 package)"),
+};
 
 }  // namespace DekiEditor
