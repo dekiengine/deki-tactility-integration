@@ -1,0 +1,12 @@
+{
+    "Build as a loadable app for a device running Tactility, or for its simulator": "构建为可加载的应用，用于运行 Tactility 的设备或其模拟器",
+    "Built from Tactility's sources at the pinned commit (0.8 has no published SDK yet), plus TactilityTool's app build tool and configuration. Needs the ESP-IDF SDK first; takes a while.": "从固定提交的 Tactility 源码构建（0.8 还没有发布 SDK），并加上 TactilityTool 的应用构建工具和配置。需要先安装 ESP-IDF SDK，耗时较长。",
+    "Espressif IoT Development Framework (shared with the ESP32 package)": "Espressif 物联网开发框架（与 ESP32 包共用）",
+    "Mode": "模式",
+    "Panel": "面板",
+    "Panel takes the whole display over and stops LVGL, so the game owns every pixel. Window runs the game in an app window with LVGL and the OS still running around it, at the platform's screen size.": "面板模式接管整个显示屏并停止 LVGL，游戏独占每个像素。窗口模式在应用窗口中运行游戏，LVGL 和系统仍在周围运行，大小为平台的屏幕大小。",
+    "Tactility Display Setup": "Tactility 显示屏设置",
+    "Tactility Input Setup": "Tactility 输入设置",
+    "The Tactility simulator, built from Tactility's sources at the pinned commit and packaged as an SDK, plus TactilityTool's app build tool. Takes a while.": "Tactility 模拟器，从固定提交的 Tactility 源码构建并打包为 SDK，并加上 TactilityTool 的应用构建工具。耗时较长。",
+    "Window": "窗口"
+}
