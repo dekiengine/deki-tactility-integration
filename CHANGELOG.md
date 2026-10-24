@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.20.3
 
 ### Fixed
 - The device SDK and app builds enter ESP-IDF from its own directory, so they
