@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- The device SDK and app builds enter ESP-IDF from its own directory, so they
+  work where `sh` is dash (Ubuntu, Debian). There, `export.sh` could not find
+  ESP-IDF and the TactilitySDK build stopped at once.
+
 ## 0.19.0
 
 ### Changed

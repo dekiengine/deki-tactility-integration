@@ -68,13 +68,16 @@ jobs:
             echo "::error::No Tactility pin found in $pin"
             exit 1
           fi
+          # Where the editor keeps toolchains on Linux (EditorPaths).
+          toolchains="${XDG_DATA_HOME:-$HOME/.local/share}/deki-editor/toolchains"
           {
             echo "editor=$(git -C deki-editor rev-parse --short HEAD)-$(git -C deki-editor/deki-engine rev-parse --short HEAD)"
             echo "deps=${{ hashFiles('deki-editor/CMakeLists.txt', 'deki-editor/tests/CMakeLists.txt') }}"
             echo "idf=${{ hashFiles('packages/deki-tactility-integration/editor/TactilityToolchainDefinition.h') }}"
             echo "version=$version"
             echo "tactility=$commit-$(echo "$tool" | cut -c1-12)"
-            echo "sdk=$HOME/.deki-editor/toolchains/tactility/$(echo "$commit" | cut -c1-12)"
+            echo "toolchains=$toolchains"
+            echo "sdk=$toolchains/tactility/$(echo "$commit" | cut -c1-12)"
           } >> "$GITHUB_OUTPUT"
 
       # The reflection codegen assigns a type to a package when the package's
@@ -126,7 +129,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ~/.deki-editor/toolchains/espressif
+            ${{ steps.keys.outputs.toolchains }}/espressif
             ~/.espressif
           key: esp-idf-linux-${{ steps.keys.outputs.idf }}
 
@@ -211,4 +214,4 @@ jobs:
 
       - name: Editor log on failure
         if: failure()
-        run: cat ~/.deki-editor/Editor.log ~/.config/DekiEditor/Editor.log 2>/dev/null || true
+        run: cat ~/.config/DekiEditor/Editor.log 2>/dev/null || true

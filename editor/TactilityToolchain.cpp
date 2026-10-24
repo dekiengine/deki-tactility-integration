@@ -553,7 +553,10 @@ std::string TactilitySdk::IdfEnvironmentScript(const std::string& idfPath)
     lines += "call \"" + Native(idfPath) + "\\export.bat\" || exit /b 1\r\n";
     return lines;
 #else
-    return ". \"" + idfPath + "/export.sh\"\n";
+    // From inside the ESP-IDF directory: sourced by a shell that does not say
+    // where a sourced script lives (dash, Ubuntu's sh), export.sh finds
+    // ESP-IDF only in the current directory.
+    return "cd \"" + idfPath + "\"\n. ./export.sh\n";
 #endif
 }
 
