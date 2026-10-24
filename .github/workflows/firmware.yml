@@ -119,13 +119,17 @@ jobs:
             !${{ runner.temp }}/w/deki-editor/build/_deps/*-build
           key: deps-linux-${{ steps.keys.outputs.deps }}
 
+      # The editor's objects and the app's (ESP-IDF's ccache, below), so a new
+      # key every run: the newest cache of the same editor commit comes back
+      # first, then any.
       - name: Restore compiler output
-        id: ccache
         uses: actions/cache/restore@v4
         with:
           path: ${{ runner.temp }}/ccache
-          key: ccache-firmware-${{ steps.keys.outputs.editor }}
-          restore-keys: ccache-firmware-
+          key: ccache-firmware-${{ steps.keys.outputs.editor }}-${{ github.run_id }}
+          restore-keys: |
+            ccache-firmware-${{ steps.keys.outputs.editor }}-
+            ccache-firmware-
 
       # ESP-IDF's sources live with the editor's toolchains; its compilers and
       # Python environment, which install.sh puts in ~/.espressif, go with
@@ -171,13 +175,6 @@ jobs:
             !${{ runner.temp }}/w/deki-editor/build/_deps/*-build
           key: deps-linux-${{ steps.keys.outputs.deps }}
 
-      - name: Save compiler output
-        if: always() && steps.ccache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ runner.temp }}/ccache
-          key: ccache-firmware-${{ steps.keys.outputs.editor }}
-
       # This package is already in demo-packages, so it is linked as checked
       # out; the rest are cloned at master.
       - name: Packages
@@ -216,6 +213,8 @@ jobs:
           key: esp-idf-linux-${{ steps.keys.outputs.idf }}
 
       - name: Build the app
+        env:
+          IDF_CCACHE_ENABLE: 1
         run: |
           export LD_LIBRARY_PATH="$ROOT/deki-editor/build/lib:$ROOT/deki-editor/build/bin"
           xvfb-run -a "$ROOT/deki-editor/build/bin/DekiEditor" --build-firmware --platform "$PLATFORM" "$ROOT/deki-demo"
@@ -227,6 +226,13 @@ jobs:
           ls -l "$app"
           mkdir -p "$RUNNER_TEMP/app"
           cp "$app" "$RUNNER_TEMP/app/"
+
+      - name: Save compiler output
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/ccache
+          key: ccache-firmware-${{ steps.keys.outputs.editor }}-${{ github.run_id }}
 
       - name: Whether the TactilitySDK is complete
         if: always() && steps.sdk.outputs.cache-hit != 'true'
