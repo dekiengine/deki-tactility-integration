@@ -107,16 +107,21 @@ jobs:
             libegl1-mesa-dev libgl1-mesa-dev libasound2-dev libpulse-dev \
             libdbus-1-dev libudev-dev
 
-      - name: Cache fetched dependencies
-        uses: actions/cache@v4
+      # Every cache is restored and saved in separate steps, and saved whether
+      # or not the build after it passes: a red run is still worth starting
+      # warm next time.
+      - name: Restore fetched dependencies
+        id: deps
+        uses: actions/cache/restore@v4
         with:
           path: |
             ${{ runner.temp }}/w/deki-editor/build/_deps
             !${{ runner.temp }}/w/deki-editor/build/_deps/*-build
           key: deps-linux-${{ steps.keys.outputs.deps }}
 
-      - name: Cache compiler output
-        uses: actions/cache@v4
+      - name: Restore compiler output
+        id: ccache
+        uses: actions/cache/restore@v4
         with:
           path: ${{ runner.temp }}/ccache
           key: ccache-firmware-${{ steps.keys.outputs.editor }}
@@ -125,8 +130,9 @@ jobs:
       # ESP-IDF's sources live with the editor's toolchains; its compilers and
       # Python environment, which install.sh puts in ~/.espressif, go with
       # them.
-      - name: Cache ESP-IDF
-        uses: actions/cache@v4
+      - name: Restore ESP-IDF
+        id: idf
+        uses: actions/cache/restore@v4
         with:
           path: |
             ${{ steps.keys.outputs.toolchains }}/espressif
@@ -156,17 +162,44 @@ jobs:
       - name: Build the editor
         run: cmake --build "$ROOT/deki-editor/build" --target DekiEditor
 
+      - name: Save fetched dependencies
+        if: always() && steps.deps.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ runner.temp }}/w/deki-editor/build/_deps
+            !${{ runner.temp }}/w/deki-editor/build/_deps/*-build
+          key: deps-linux-${{ steps.keys.outputs.deps }}
+
+      - name: Save compiler output
+        if: always() && steps.ccache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/ccache
+          key: ccache-firmware-${{ steps.keys.outputs.editor }}
+
       # This package is already in demo-packages, so it is linked as checked
       # out; the rest are cloned at master.
       - name: Packages
         run: python3 "$ROOT/deki-editor/tools/ci/link_demo_packages.py" "$ROOT/deki-demo" "$ROOT/demo-packages"
 
       - name: Install the Tactility toolchain
+        id: install
         run: |
           editor="$ROOT/deki-editor/build/bin/DekiEditor"
           export LD_LIBRARY_PATH="$ROOT/deki-editor/build/lib:$ROOT/deki-editor/build/bin"
           xvfb-run -a "$editor" --install-toolchain esp-idf --platform "$PLATFORM" "$ROOT/deki-demo"
+          echo "idf=true" >> "$GITHUB_OUTPUT"
           xvfb-run -a "$editor" --install-toolchain tactility-sdk --platform "$PLATFORM" "$ROOT/deki-demo"
+
+      - name: Save ESP-IDF
+        if: always() && steps.idf.outputs.cache-hit != 'true' && steps.install.outputs.idf == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ steps.keys.outputs.toolchains }}/espressif
+            ~/.espressif
+          key: esp-idf-linux-${{ steps.keys.outputs.idf }}
 
       - name: Build the app
         run: |

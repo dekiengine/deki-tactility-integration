@@ -126,6 +126,42 @@ long lroundf(float x)
     return x < 0 ? -(long)r : (long)r;
 }
 
+/* The float next to `from` toward `to` (std::nextafter, deki-2d's cropped
+ * text). Floats of one sign are ordered as their bit patterns are, so the
+ * neighbour is one step in the bits: up when moving away from zero, down when
+ * moving toward it. From zero it is the smallest subnormal of the side `to` is
+ * on. */
+float nextafterf(float from, float to)
+{
+    if (isnan(from) || isnan(to))
+    {
+        return from + to;
+    }
+    if (from == to)
+    {
+        return to;
+    }
+    union
+    {
+        float f;
+        uint32_t u;
+    } v = { from };
+    if (from == 0.0f)
+    {
+        v.u = 1;
+        return to > 0.0f ? v.f : -v.f;
+    }
+    if ((from < to) == (from > 0.0f))
+    {
+        ++v.u;
+    }
+    else
+    {
+        --v.u;
+    }
+    return v.f;
+}
+
 float strtof(const char* s, char** end)
 {
     return (float)strtod(s, end);

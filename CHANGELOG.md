@@ -6,6 +6,9 @@
 - The device SDK and app builds enter ESP-IDF from its own directory, so they
   work where `sh` is dash (Ubuntu, Debian). There, `export.sh` could not find
   ESP-IDF and the TactilitySDK build stopped at once.
+- `nextafterf` is defined for device apps (`TactilityLibc.c`): Tactility does
+  not export it, and deki-2d 0.20.1's cropped text calls it, so the device
+  refused the app.
 
 ## 0.19.0
 
