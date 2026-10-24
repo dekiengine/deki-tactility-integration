@@ -1,0 +1,214 @@
+# A Tactility app built from deki-demo for the T-Deck Plus, nightly and on
+# demand: the editor at master, this package at the commit under test, and
+# every other package the demo uses at master. The editor's own nightly builds
+# the demo's ESP-IDF boards only; this is where its Tactility board is built.
+#
+# The toolchain is what a user installs: ESP-IDF v6.1 and a TactilitySDK built
+# from Tactility's sources at the commit TactilityToolchain.h pins. Building
+# the SDK is most of a cold run, so it is cached, keyed on that pin.
+name: Firmware
+
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: firmware-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PLATFORM: tactility_tdeck_plus
+  CMAKE_BUILD_TYPE: Release
+  CCACHE_MAXSIZE: 1500M
+
+jobs:
+  tactility:
+    name: Tactility app (T-Deck Plus)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Check out the package
+        uses: actions/checkout@v4
+        with:
+          path: packages/deki-tactility-integration
+
+      - name: Check out deki-editor
+        uses: actions/checkout@v4
+        with:
+          repository: dekiengine/deki-editor
+          path: deki-editor
+          submodules: false
+          persist-credentials: false
+
+      - name: Fetch deki-engine
+        run: git -C deki-editor submodule update --init --depth=1
+
+      - name: Check out deki-demo
+        uses: actions/checkout@v4
+        with:
+          repository: dekiengine/deki-demo
+          path: deki-demo
+          persist-credentials: false
+
+      # The cache keys, read before the move below takes the files out of the
+      # workspace: the editor and engine commits, the editor's dependencies,
+      # the ESP-IDF pin, and the Tactility and TactilityTool commits.
+      - name: Cache keys
+        id: keys
+        run: |
+          pin=packages/deki-tactility-integration/editor/TactilityToolchain.h
+          commit=$(sed -n 's/.*kCommit = "\([0-9a-f]*\)".*/\1/p' "$pin")
+          tool=$(sed -n 's/.*kToolCommit = "\([0-9a-f]*\)".*/\1/p' "$pin")
+          version=$(sed -n 's/.*kVersion = "\([^"]*\)".*/\1/p' "$pin")
+          if [ -z "$commit" ] || [ -z "$tool" ] || [ -z "$version" ]; then
+            echo "::error::No Tactility pin found in $pin"
+            exit 1
+          fi
+          {
+            echo "editor=$(git -C deki-editor rev-parse --short HEAD)-$(git -C deki-editor/deki-engine rev-parse --short HEAD)"
+            echo "deps=${{ hashFiles('deki-editor/CMakeLists.txt', 'deki-editor/tests/CMakeLists.txt') }}"
+            echo "idf=${{ hashFiles('packages/deki-tactility-integration/editor/TactilityToolchainDefinition.h') }}"
+            echo "version=$version"
+            echo "tactility=$commit-$(echo "$tool" | cut -c1-12)"
+            echo "sdk=$HOME/.deki-editor/toolchains/tactility/$(echo "$commit" | cut -c1-12)"
+          } >> "$GITHUB_OUTPUT"
+
+      # The reflection codegen assigns a type to a package when the package's
+      # directory name is a component of the type's source path, and this
+      # workspace is named after the package. The build runs from a directory
+      # whose path names no package instead. The packages go in
+      # demo-packages, not packages, so the editor's configure step does not
+      # find them and set up every package's tests.
+      - name: Move out of the repository-named workspace
+        run: |
+          root="$RUNNER_TEMP/w"
+          mkdir -p "$root"
+          mv deki-editor deki-demo "$root/"
+          mv packages "$root/demo-packages"
+          echo "ROOT=$root" >> "$GITHUB_ENV"
+          echo "CCACHE_DIR=$RUNNER_TEMP/ccache" >> "$GITHUB_ENV"
+
+      - name: Install toolchain and build dependencies
+        run: |
+          bash "$ROOT/deki-editor/tools/ci/add_toolchain_ppa.sh"
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            g++-16 gcc-16 cmake ninja-build ccache git curl pkg-config xvfb \
+            python3 python3-venv libusb-1.0-0 \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
+            libxss-dev libxkbcommon-dev libwayland-dev libdecor-0-dev \
+            libegl1-mesa-dev libgl1-mesa-dev libasound2-dev libpulse-dev \
+            libdbus-1-dev libudev-dev
+
+      - name: Cache fetched dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ runner.temp }}/w/deki-editor/build/_deps
+            !${{ runner.temp }}/w/deki-editor/build/_deps/*-build
+          key: deps-linux-${{ steps.keys.outputs.deps }}
+
+      - name: Cache compiler output
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/ccache
+          key: ccache-firmware-${{ steps.keys.outputs.editor }}
+          restore-keys: ccache-firmware-
+
+      # ESP-IDF's sources live with the editor's toolchains; its compilers and
+      # Python environment, which install.sh puts in ~/.espressif, go with
+      # them.
+      - name: Cache ESP-IDF
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.deki-editor/toolchains/espressif
+            ~/.espressif
+          key: esp-idf-linux-${{ steps.keys.outputs.idf }}
+
+      # Only the packaged SDK and TactilityTool, not the 1.4 GB build tree they
+      # came from. The SDK directory also holds the list of symbols the
+      # firmware exports to apps, read from Tactility's sources on the first
+      # app build; the cache is saved after that build, so a warm run never
+      # needs the sources.
+      - name: Restore the TactilitySDK
+        id: sdk
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ${{ steps.keys.outputs.sdk }}/sdk
+            ${{ steps.keys.outputs.sdk }}/tool
+          key: tactility-sdk-esp32s3-${{ steps.keys.outputs.tactility }}
+
+      - name: Configure
+        run: >-
+          cmake -S "$ROOT/deki-editor" -B "$ROOT/deki-editor/build" -G Ninja -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE
+          -DCMAKE_C_COMPILER=gcc-16 -DCMAKE_CXX_COMPILER=g++-16
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build the editor
+        run: cmake --build "$ROOT/deki-editor/build" --target DekiEditor
+
+      # This package is already in demo-packages, so it is linked as checked
+      # out; the rest are cloned at master.
+      - name: Packages
+        run: python3 "$ROOT/deki-editor/tools/ci/link_demo_packages.py" "$ROOT/deki-demo" "$ROOT/demo-packages"
+
+      - name: Install the Tactility toolchain
+        run: |
+          editor="$ROOT/deki-editor/build/bin/DekiEditor"
+          export LD_LIBRARY_PATH="$ROOT/deki-editor/build/lib:$ROOT/deki-editor/build/bin"
+          xvfb-run -a "$editor" --install-toolchain esp-idf --platform "$PLATFORM" "$ROOT/deki-demo"
+          xvfb-run -a "$editor" --install-toolchain tactility-sdk --platform "$PLATFORM" "$ROOT/deki-demo"
+
+      - name: Build the app
+        run: |
+          export LD_LIBRARY_PATH="$ROOT/deki-editor/build/lib:$ROOT/deki-editor/build/bin"
+          xvfb-run -a "$ROOT/deki-editor/build/bin/DekiEditor" --build-firmware --platform "$PLATFORM" "$ROOT/deki-demo"
+          app=$(find "$ROOT/deki-demo/generated" -name '*.app' -type f -path "*$PLATFORM*" | head -n1)
+          if [ -z "$app" ]; then
+            echo "::error::The build finished but no .app was found"
+            exit 1
+          fi
+          ls -l "$app"
+          mkdir -p "$RUNNER_TEMP/app"
+          cp "$app" "$RUNNER_TEMP/app/"
+
+      - name: Whether the TactilitySDK is complete
+        if: always() && steps.sdk.outputs.cache-hit != 'true'
+        id: sdk-complete
+        run: |
+          sdk="${{ steps.keys.outputs.sdk }}/sdk/${{ steps.keys.outputs.version }}-esp32s3"
+          if [ -f "$sdk/TactilitySDK/idf-version.txt" ] && [ -f "$sdk/deki-app-exports-v2.txt" ]; then
+            echo "save=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "The SDK or its export list is incomplete; not cached"
+          fi
+
+      - name: Save the TactilitySDK
+        uses: actions/cache/save@v4
+        if: always() && steps.sdk-complete.outputs.save == 'true'
+        with:
+          path: |
+            ${{ steps.keys.outputs.sdk }}/sdk
+            ${{ steps.keys.outputs.sdk }}/tool
+          key: tactility-sdk-esp32s3-${{ steps.keys.outputs.tactility }}
+
+      - name: Upload the app
+        uses: actions/upload-artifact@v4
+        with:
+          name: tactility-${{ env.PLATFORM }}
+          path: ${{ runner.temp }}/app
+          retention-days: 7
+
+      - name: ccache stats
+        if: always()
+        run: ccache -s
+
+      - name: Editor log on failure
+        if: failure()
+        run: cat ~/.deki-editor/Editor.log ~/.config/DekiEditor/Editor.log 2>/dev/null || true
