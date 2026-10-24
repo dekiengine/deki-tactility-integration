@@ -183,14 +183,28 @@ jobs:
       - name: Packages
         run: python3 "$ROOT/deki-editor/tools/ci/link_demo_packages.py" "$ROOT/deki-demo" "$ROOT/demo-packages"
 
+      # --install-toolchain installs again what is already there (ESP-IDF is
+      # downloaded again, the SDK rebuilt from source), so a component that
+      # came from a cache is left alone.
       - name: Install the Tactility toolchain
         id: install
+        env:
+          IDF_CACHED: ${{ steps.idf.outputs.cache-hit }}
+          SDK_CACHED: ${{ steps.sdk.outputs.cache-hit }}
         run: |
           editor="$ROOT/deki-editor/build/bin/DekiEditor"
           export LD_LIBRARY_PATH="$ROOT/deki-editor/build/lib:$ROOT/deki-editor/build/bin"
-          xvfb-run -a "$editor" --install-toolchain esp-idf --platform "$PLATFORM" "$ROOT/deki-demo"
-          echo "idf=true" >> "$GITHUB_OUTPUT"
-          xvfb-run -a "$editor" --install-toolchain tactility-sdk --platform "$PLATFORM" "$ROOT/deki-demo"
+          if [ "$IDF_CACHED" = true ]; then
+            echo "ESP-IDF from the cache"
+          else
+            xvfb-run -a "$editor" --install-toolchain esp-idf --platform "$PLATFORM" "$ROOT/deki-demo"
+            echo "idf=true" >> "$GITHUB_OUTPUT"
+          fi
+          if [ "$SDK_CACHED" = true ]; then
+            echo "TactilitySDK from the cache"
+          else
+            xvfb-run -a "$editor" --install-toolchain tactility-sdk --platform "$PLATFORM" "$ROOT/deki-demo"
+          fi
 
       - name: Save ESP-IDF
         if: always() && steps.idf.outputs.cache-hit != 'true' && steps.install.outputs.idf == 'true'
