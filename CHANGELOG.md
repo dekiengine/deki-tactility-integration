@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- `F:/` works as on a board: files the game writes under `F:/` go to
+  `internal/` in the app's user data, read from there when the app's assets
+  have no file of that name, and the assets are never written. Before, a game
+  could not write under `F:/` at all on Tactility.
+
 ## 0.20.3
 
 ### Fixed

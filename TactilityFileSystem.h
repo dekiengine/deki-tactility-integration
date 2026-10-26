@@ -10,8 +10,12 @@ namespace DekiTactility
 /// Deki filesystem mapped onto the directories Tactility gives an app. Deki's
 /// two virtual prefixes map to:
 ///
-///   F:/  flash    -> the app's assets directory: read-only game data shipped
-///                    in the .app bundle (project_data.bin, boot.scene).
+///   F:/  flash    -> the app's assets directory: the game's data shipped in
+///                    the .app bundle (project_data.bin, boot.scene, assets),
+///                    read and never written. F:/ files the game writes go to
+///                    internal/ in the user data directory, and are read from
+///                    there when the game's data has no file of that name: as
+///                    on a board.
 ///   S:/  SD card  -> the app's user data directory: anything the game writes,
 ///                    which Tactility keeps across OS upgrades.
 ///
@@ -41,8 +45,14 @@ public:
     bool ConvertPath(const char* virtualPath, char* outBuffer, size_t bufferSize) override;
 
 private:
-    /// Resolves a virtual path to a real one. Empty on failure.
+    /// Resolves a virtual path to a real one. An F:/ path is the game's data
+    /// when that has the file, else internal/ in the user data. Empty on
+    /// failure.
     std::string Resolve(const char* virtualPath) const;
+
+    /// True when `virtualPath` names a file of the game's data (F:/ in the
+    /// assets directory), which is never written.
+    bool IsGameData(const char* virtualPath) const;
 
     std::string m_AppId;
     std::string m_AssetsPath;    ///< real path behind "F:/", no trailing slash

@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <sys/stat.h>
 
 #include <deki/LogSystem.h>
 
@@ -42,6 +43,26 @@ int OriginToStdio(Deki::IFileSystem::SeekOrigin origin)
     }
     return SEEK_SET;
 }
+
+bool IsFile(const std::string& path)
+{
+    struct stat st;
+    return stat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode);
+}
+
+// Makes the folders on the way to the file `path`, as the desktop does: a
+// game writing "F:/saves/slot1.dat" should not have to make "saves" first.
+void MakeParents(const std::string& path)
+{
+#if defined(DEKI_TACTILITY_TARGET)
+    for (size_t slash = path.find('/', 1); slash != std::string::npos; slash = path.find('/', slash + 1))
+    {
+        mkdir(path.substr(0, slash).c_str(), 0775);
+    }
+#else
+    (void)path;  // the host build opens no files
+#endif
+}
 }  // namespace
 
 TactilityFileSystem::TactilityFileSystem(const char* appId)
@@ -64,7 +85,8 @@ std::string TactilityFileSystem::Resolve(const char* virtualPath) const
     // Prefixes are matched case-sensitively, as the engine writes them.
     if (std::strncmp(virtualPath, "F:/", 3) == 0)
     {
-        return m_AssetsPath + "/" + (virtualPath + 3);
+        const std::string inAssets = m_AssetsPath + "/" + (virtualPath + 3);
+        return IsFile(inAssets) ? inAssets : m_UserDataPath + "/internal/" + (virtualPath + 3);
     }
     if (std::strncmp(virtualPath, "S:/", 3) == 0)
     {
@@ -78,6 +100,12 @@ std::string TactilityFileSystem::Resolve(const char* virtualPath) const
         return virtualPath;  // already absolute
     }
     return m_UserDataPath + "/" + virtualPath;
+}
+
+bool TactilityFileSystem::IsGameData(const char* virtualPath) const
+{
+    return virtualPath != nullptr && std::strncmp(virtualPath, "F:/", 3) == 0 &&
+           IsFile(m_AssetsPath + "/" + (virtualPath + 3));
 }
 
 bool TactilityFileSystem::ConvertPath(const char* virtualPath, char* outBuffer, size_t bufferSize)
@@ -149,10 +177,23 @@ Deki::IFileSystem::FileHandle TactilityFileSystem::OpenFile(const char* path, Op
     {
         return nullptr;
     }
+    const bool writing = mode == OpenMode::WriteBinary || mode == OpenMode::WriteText;
+    if (writing && IsGameData(path))
+    {
+        // The game's data is what the .app shipped, the same every run.
+        DEKI_LOG_WARNING("%s is part of the game's data, which is never written; write the game's own files "
+                         "under another name",
+                         path);
+        return nullptr;
+    }
     const std::string resolved = Resolve(path);
     if (resolved.empty())
     {
         return nullptr;
+    }
+    if (writing)
+    {
+        MakeParents(resolved);
     }
     return (FileHandle)std::fopen(resolved.c_str(), ModeToStdio(mode));
 }
