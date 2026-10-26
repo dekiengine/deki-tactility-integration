@@ -1,7 +1,7 @@
 // libstdc++ functions a Tactility device app needs and Tactility does not
 // export to apps (see TactilityLibc.c for why they are defined in the app).
 //
-// These are the out-of-line parts of std::unordered_map/set and
+// These are the out-of-line parts of std::unordered_map/set, std::list and
 // std::make_shared that live in libstdc++.so rather than in its headers. Every
 // caller is inside the app, so they only have to agree with each other, not
 // with the firmware's copies: the hash need not be libstdc++'s, and the bucket
@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <list>
 #include <memory>
 #include <typeinfo>
 #include <unordered_map>
@@ -89,15 +90,9 @@ size_t _Hash_bytes(const void* ptr, size_t len, size_t seed)
     }
     switch (len)
     {
-    case 3:
-        h ^= static_cast<uint32_t>(data[2]) << 16;
-        [[fallthrough]];
-    case 2:
-        h ^= static_cast<uint32_t>(data[1]) << 8;
-        [[fallthrough]];
-    case 1:
-        h ^= data[0];
-        h *= m;
+        case 3: h ^= static_cast<uint32_t>(data[2]) << 16; [[fallthrough]];
+        case 2: h ^= static_cast<uint32_t>(data[1]) << 8; [[fallthrough]];
+        case 1: h ^= data[0]; h *= m;
     }
     h ^= h >> 13;
     h *= m;
@@ -141,6 +136,47 @@ pair<bool, size_t> _Prime_rehash_policy::_M_need_rehash(size_t n_bkt, size_t n_e
     }
     _M_next_resize = static_cast<size_t>(static_cast<float>(n_bkt) * _M_max_load_factor);
     return { false, 0 };
+}
+
+// A std::list node's links. A list is a ring through its sentinel node.
+
+// Puts this node in front of `position`.
+void _List_node_base::_M_hook(_List_node_base* const position) noexcept
+{
+    _M_next = position;
+    _M_prev = position->_M_prev;
+    position->_M_prev->_M_next = this;
+    position->_M_prev = this;
+}
+
+// Takes this node out of its list; its own links are left as they were.
+void _List_node_base::_M_unhook() noexcept
+{
+    _M_prev->_M_next = _M_next;
+    _M_next->_M_prev = _M_prev;
+}
+
+// Moves the nodes [first, last) in front of this one (splice). They may come
+// from this list or another; nothing moves when this node is `last`.
+void _List_node_base::_M_transfer(_List_node_base* const first, _List_node_base* const last) noexcept
+{
+    if (this == last)
+    {
+        return;
+    }
+    _List_node_base* const lastNode = last->_M_prev;
+    _List_node_base* const before = first->_M_prev;
+
+    // Close the gap they leave.
+    before->_M_next = last;
+    last->_M_prev = before;
+
+    // And link them in between this node and the one before it.
+    _List_node_base* const previous = _M_prev;
+    previous->_M_next = first;
+    first->_M_prev = previous;
+    lastNode->_M_next = this;
+    _M_prev = lastNode;
 }
 
 }  // namespace __detail

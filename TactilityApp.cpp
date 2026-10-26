@@ -19,13 +19,13 @@
 #include <deki/Main.h>
 #include <deki/Time.h>
 #include <deki/providers/FileSystem.h>
-#include <deki/providers/HostMemoryProvider.h>
 #include <deki/providers/IFileSystem.h>
 #include <deki/providers/Memory.h>
 
 #include <memory>
 
 #include "TactilityFileSystem.h"
+#include "TactilityMemoryProvider.h"
 #include "TactilityRuntime.h"
 #include "TactilityTimeProvider.h"
 
@@ -122,7 +122,7 @@ int RunGame()
 
     // Providers first: Engine::Initialize() initialises them, then finds the
     // assets in F:/assets/.
-    Deki::Memory::SetBackend(new Deki::HostMemoryProvider());
+    Deki::Memory::SetBackend(new TactilityMemoryProvider());
     Deki::Time::SetTimeProvider(std::make_unique<TactilityTimeProvider>());
     if (!Deki::FileSystem::SetFileSystem(new TactilityFileSystem(DEKI_TACTILITY_APP_ID)))
     {

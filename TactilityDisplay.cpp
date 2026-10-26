@@ -20,7 +20,6 @@ extern "C"
 // port with no second core to send frames from.
 #if defined(DEKI_TACTILITY_TARGET) && defined(ESP_PLATFORM)
 #define DEKI_TACTILITY_ASYNC_PRESENT 1
-#include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <freertos/semphr.h>
@@ -41,13 +40,6 @@ namespace
 /// boards the display shares its bus with the SD card, so the lock can be held
 /// for a while; dropping one band is better than blocking the game loop.
 constexpr uint32_t kLockTimeoutTicks = 100;
-
-// PROBE (temporary): frame timing.
-int64_t g_ProbeStart = 0;
-int64_t g_ProbeWaitUs = 0;
-int64_t g_ProbeCopyUs = 0;
-volatile int64_t g_ProbeSendUs = 0;
-uint32_t g_ProbeFrames = 0;
 
 /// Maps the panel's own format to the engine's. Returns false for formats Deki
 /// has no equivalent for: MONOCHROME and GRAYSCALE8 (e-paper, some OLEDs)
@@ -233,12 +225,10 @@ void TactilityDisplay::PresentTaskMain(void* arg)
             return;
         }
         const QueuedFrame& frame = self->m_Frames[index];
-        const int64_t sendStart = esp_timer_get_time();
         for (const Deki::Rect& r : frame.rects)
         {
             self->PushRect(frame.pixels, frame.width, self->m_PanelFormat, r.left, r.top, r.right, r.bottom);
         }
-        g_ProbeSendUs += esp_timer_get_time() - sendStart;
         xSemaphoreGive(free);
 
         // At full speed the next frame is always waiting and this task never
@@ -259,10 +249,7 @@ void TactilityDisplay::QueueFrame(const uint8_t* framebuffer, int width, int hei
 {
 #if DEKI_TACTILITY_ASYNC_PRESENT
     // Waits only while both copies are queued or being sent.
-    const int64_t waitStart = esp_timer_get_time();
     xSemaphoreTake(static_cast<SemaphoreHandle_t>(m_FreeFrames), portMAX_DELAY);
-    const int64_t copyStart = esp_timer_get_time();
-    g_ProbeWaitUs += copyStart - waitStart;
     const int index = m_NextFrame;
     m_NextFrame = 1 - m_NextFrame;
     QueuedFrame& frame = m_Frames[index];
@@ -294,27 +281,8 @@ void TactilityDisplay::QueueFrame(const uint8_t* framebuffer, int width, int hei
                         stride * (size_t)(r.bottom - r.top));
         }
     }
-    g_ProbeCopyUs += esp_timer_get_time() - copyStart;
     xQueueSend(static_cast<QueueHandle_t>(m_FrameReady), &index, portMAX_DELAY);
 
-    // PROBE (temporary): where each frame's time goes, every 2 s.
-    if (g_ProbeStart == 0)
-    {
-        g_ProbeStart = waitStart;
-    }
-    ++g_ProbeFrames;
-    if (waitStart - g_ProbeStart >= 2000000)
-    {
-        const double n = (double)g_ProbeFrames;
-        DEKI_LOG_INFO("PROBE fps=%.1f frame=%.2fms wait=%.2fms copy=%.2fms send=%.2fms rects=%d",
-                      n * 1e6 / (double)(waitStart - g_ProbeStart), (double)(waitStart - g_ProbeStart) / n / 1000.0,
-                      (double)g_ProbeWaitUs / n / 1000.0, (double)g_ProbeCopyUs / n / 1000.0,
-                      (double)g_ProbeSendUs / n / 1000.0, (int)frame.rects.size());
-        g_ProbeStart = waitStart;
-        g_ProbeFrames = 0;
-        g_ProbeWaitUs = g_ProbeCopyUs = 0;
-        g_ProbeSendUs = 0;
-    }
 #else
     (void)framebuffer;
     (void)width;

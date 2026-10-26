@@ -19,6 +19,7 @@
 #include <limits.h>
 #include <math.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -82,15 +83,15 @@ bool __atomic_compare_exchange_8(volatile void* mem, void* expected, uint64_t de
     return equal;
 }
 
-#define DEKI_ATOMIC_FETCH_8(name, op)                                    \
-    uint64_t __atomic_fetch_##name##_8(volatile void* mem, uint64_t value, int order) \
-    {                                                                    \
-        (void)order;                                                     \
-        vPortEnterCritical(&s_Atomic64);                                 \
-        const uint64_t old = *(volatile uint64_t*)mem;                   \
-        *(volatile uint64_t*)mem = old op value;                         \
-        vPortExitCritical(&s_Atomic64);                                  \
-        return old;                                                      \
+#define DEKI_ATOMIC_FETCH_8(name, op)                                                                                  \
+    uint64_t __atomic_fetch_##name##_8(volatile void* mem, uint64_t value, int order)                                  \
+    {                                                                                                                  \
+        (void)order;                                                                                                   \
+        vPortEnterCritical(&s_Atomic64);                                                                               \
+        const uint64_t old = *(volatile uint64_t*)mem;                                                                 \
+        *(volatile uint64_t*)mem = old op value;                                                                       \
+        vPortExitCritical(&s_Atomic64);                                                                                \
+        return old;                                                                                                    \
     }
 
 DEKI_ATOMIC_FETCH_8(add, +)
@@ -180,8 +181,7 @@ long long strtoll(const char* s, char** end, int base)
         negative = *p == '-';
         ++p;
     }
-    if ((base == 0 || base == 16) && p[0] == '0' && (p[1] == 'x' || p[1] == 'X') &&
-        isxdigit((unsigned char)p[2]))
+    if ((base == 0 || base == 16) && p[0] == '0' && (p[1] == 'x' || p[1] == 'X') && isxdigit((unsigned char)p[2]))
     {
         p += 2;
         base = 16;
@@ -248,6 +248,52 @@ long long strtoll(const char* s, char** end, int base)
         return negative ? LLONG_MIN : LLONG_MAX;
     }
     return negative ? (long long)(0ULL - value) : (long long)value;
+}
+
+/* The length of s, looking at no more than max bytes (the Tiled package reads
+ * fixed-size names out of its binary maps with it). */
+size_t strnlen(const char* s, size_t max)
+{
+    size_t n = 0;
+    while (n < max && s[n] != '\0')
+    {
+        ++n;
+    }
+    return n;
+}
+
+/* Unsigned 64-bit division, which the compiler calls for a uint64_t `/` on a
+ * 32-bit core; it lives in libgcc, and Tactility does not export it. Operands
+ * that fit 32 bits take the core's own divide. The rest go bit by bit, with
+ * shifts by one only: a `/`, or a shift by a variable amount, on 64-bit values
+ * here could call into libgcc again. */
+uint64_t __udivdi3(uint64_t n, uint64_t d)
+{
+    if ((n >> 32) == 0 && (d >> 32) == 0)
+    {
+        return d == 0 ? 0 : (uint32_t)n / (uint32_t)d;
+    }
+    if (d == 0)
+    {
+        return 0;
+    }
+    uint64_t q = 0;
+    uint64_t r = 0;
+    for (int i = 0; i < 64; ++i)
+    {
+        /* A remainder with its top bit set is past any divisor once shifted:
+         * the bit that falls off is that carry. */
+        const uint64_t carry = r >> 63;
+        r = (r << 1) | (n >> 63);
+        n <<= 1;
+        q <<= 1;
+        if (carry || r >= d)
+        {
+            r -= d;
+            q |= 1;
+        }
+    }
+    return q;
 }
 
 #endif

@@ -7,6 +7,20 @@
   `internal/` in the app's user data, read from there when the app's assets
   have no file of that name, and the assets are never written. Before, a game
   could not write under `F:/` at all on Tactility.
+- **Scenes open from the SD card again.** The app gave every allocation to
+  plain `malloc`, which puts anything under 16 KB in internal RAM, so a scene's
+  objects and strings took the internal RAM Tactility needs for itself: the SD
+  card driver could not get a DMA buffer, every file read failed, and a scene
+  switch found no scene. `TactilityMemoryProvider` uses Tactility's own
+  allocator: ordinary allocations prefer PSRAM, and only what the engine asks
+  to keep internal (with DMA when asked) is internal.
+- The temporary frame-timing log (`PROBE`, every 2 s) is gone.
+
+### Fixed
+- Apps that use the Tiled package load again: `strnlen`, unsigned 64-bit
+  division (`__udivdi3`) and `std::list`'s node functions are defined for
+  device apps (`TactilityLibc.c`, `TactilityLibcxx.cpp`); Tactility does not
+  export them.
 
 ## 0.20.3
 
