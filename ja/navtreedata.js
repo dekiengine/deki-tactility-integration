@@ -32,12 +32,11 @@ var NAVTREE =
       [ "TactilityInputSetup", "index.html#c-tactilityinputsetup", null ]
     ] ],
     [ "変更履歴", "index.html#changelog", [
-      [ "0.19.0", "index.html#autotoc_md0", null ],
+      [ "0.21.0", "index.html#autotoc_md0", null ],
       [ "Changed", "index.html#autotoc_md1", null ],
-      [ "Added", "index.html#autotoc_md2", null ],
-      [ "0.18.0", "index.html#autotoc_md3", null ],
-      [ "Changed", "index.html#autotoc_md4", null ],
-      [ "Fixed", "index.html#autotoc_md5", null ]
+      [ "Fixed", "index.html#autotoc_md2", null ],
+      [ "0.20.3", "index.html#autotoc_md3", null ],
+      [ "Fixed", "index.html#autotoc_md4", null ]
     ] ]
   ] ]
 ];

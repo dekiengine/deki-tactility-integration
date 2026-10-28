@@ -57,7 +57,7 @@
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">deki-tactility-integration<span id="projectnumber">&#160;0.20.2</span>
+   <div id="projectname">deki-tactility-integration<span id="projectnumber">&#160;0.21.0</span>
    </div>
    <div id="projectbrief">Deki 패키지 레퍼런스</div>
   </td>
@@ -115,7 +115,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('index.html',''
 <img src="deki-tactility-integration.png" alt=""/>
 </div>
     <p>Deki 게임을 장치 전체를 차지하는 펌웨어가 아니라, ESP32 보드용 운영체제인 Tactility 안의 앱으로 실행합니다.</p>
-<p>저장소: <a href="https://github.com/dekiengine/deki-tactility-integration">github.com/dekiengine/deki-tactility-integration</a> · 최신 릴리스: 0.19.0 · 엔진 0.19.0 이상 필요 · 의존: <a href="https://dekiengine.github.io/deki-input/ko/">deki-input</a></p>
+<p>저장소: <a href="https://github.com/dekiengine/deki-tactility-integration">github.com/dekiengine/deki-tactility-integration</a> · 최신 릴리스: 0.21.0 · 엔진 0.19.0 이상 필요 · 의존: <a href="https://dekiengine.github.io/deki-input/ko/">deki-input</a></p>
 <p><span class="tt">DekiEditor --packages-add deki-tactility-integration &lt;project&gt;</span> 또는 패키지 관리자로 설치합니다. 엔진 자체의 컴포넌트와 C++ API는 <a href="https://dekiengine.github.io/docs/ko/">Deki 문서</a>에 있습니다.</p>
 <p>에디터에는 <b>Tactility Integration</b>(으)로 표시됩니다.</p>
 <h1 class="doxsection"><a class="anchor" id="components"></a>
@@ -160,37 +160,30 @@ TactilityInputSetup</h2>
 변경 내역</h1>
 <p>변경 내역은 영어로 되어 있습니다.</p>
 <h2 class="doxsection"><a class="anchor" id="autotoc_md0"></a>
-0.19.0</h2>
+0.21.0</h2>
 <h2 class="doxsection"><a class="anchor" id="autotoc_md1"></a>
 Changed</h2>
 <ul>
-<li><span class="tt">minEngine</span> 0.19.0: built against engine 0.19.0, whose component metadata records the package each class is in. A build of this package from before does not load and is rebuilt.</li>
+<li><span class="tt">F:/</span> works as on a board: files the game writes under <span class="tt">F:/</span> go to <span class="tt">internal/</span> in the app's user data, read from there when the app's assets have no file of that name, and the assets are never written. Before, a game could not write under <span class="tt">F:/</span> at all on Tactility.</li>
+<li><b>Scenes open from the SD card again.</b> The app gave every allocation to plain <span class="tt">malloc</span>, which puts anything under 16 KB in internal RAM, so a scene's objects and strings took the internal RAM Tactility needs for itself: the SD card driver could not get a DMA buffer, every file read failed, and a scene switch found no scene. <span class="tt">TactilityMemoryProvider</span> uses Tactility's own allocator: ordinary allocations prefer PSRAM, and only what the engine asks to keep internal (with DMA when asked) is internal.</li>
+<li>The temporary frame-timing log (<span class="tt">PROBE</span>, every 2 s) is gone.</li>
 </ul>
 <h2 class="doxsection"><a class="anchor" id="autotoc_md2"></a>
-Added</h2>
-<ul>
-<li>Japanese, Simplified Chinese and Korean: <span class="tt">editor/lang/ja.json</span>, <span class="tt">zh.json</span> and <span class="tt">ko.json</span> translate the names, tooltips and enum values this package's components show in the Inspector.</li>
-<li>The package's editor text goes through the editor's translation (<span class="tt">Tr</span>), so it shows in the editor's language. Needs the editor release that adds <span class="tt">Localization.h</span>; raise <span class="tt">minEngine</span> to it when releasing.</li>
-</ul>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md3"></a>
-0.18.0</h2>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md4"></a>
-Changed</h2>
-<ul>
-<li><span class="tt">minEngine</span> 0.18.0. Reflection ABI 21: the package must be rebuilt.</li>
-<li>The boot scenes are saved in the current scene format, as the editor writes them, so an adopted board matches its package copy.</li>
-<li>The Tactility board template uses <span class="tt">externalMemorySize</span> and keeps <span class="tt">mcuChip</span> in <span class="tt">frameworkOptions</span>, as the editor saves them.</li>
-<li><b>Names follow the code style</b> (deki-engine/docs/codestyle): types, functions and enum values are PascalCase, constants kPascalCase, members m_PascalCase, locals and parameters camelCase. The code is formatted with clang-format 22.</li>
-<li>The functions the editor finds by name are PascalCase: DekiTactilityRegisterComponents, DekiTactilityGetAutoComponentCount, DekiTactilityEnsureRegistered and the rest. Built against engine ABI 21; a build of this package from before does not load and is rebuilt.</li>
-</ul>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md5"></a>
 Fixed</h2>
 <ul>
-<li>A build picks up package source files added after it was first configured.</li>
+<li>Apps that use the Tiled package load again: <span class="tt">strnlen</span>, unsigned 64-bit division (<span class="tt">__udivdi3</span>) and <span class="tt">std::list</span>'s node functions are defined for device apps (<span class="tt">TactilityLibc.c</span>, <span class="tt">TactilityLibcxx.cpp</span>); Tactility does not export them.</li>
+</ul>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md3"></a>
+0.20.3</h2>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md4"></a>
+Fixed</h2>
+<ul>
+<li>The device SDK and app builds enter ESP-IDF from its own directory, so they work where <span class="tt">sh</span> is dash (Ubuntu, Debian). There, <span class="tt">export.sh</span> could not find ESP-IDF and the TactilitySDK build stopped at once.</li>
+<li><span class="tt">nextafterf</span> is defined for device apps (<span class="tt">TactilityLibc.c</span>): Tactility does not export it, and deki-2d 0.20.1's cropped text calls it, so the device refused the app.</li>
 </ul>
 <p>이전 릴리스: <a href="https://github.com/dekiengine/deki-tactility-integration/blob/master/CHANGELOG.md">CHANGELOG.md</a></p>
 <hr  />
-<p>패키지의 리플렉션 데이터에서 생성했습니다(엔진 0.20.2). 속성 이름은 씬 파일에서 쓰는 키입니다. 이름을 바꿔도 별칭이 유지됩니다(<a href="https://github.com/dekiengine/deki-editor/blob/master/COMPATIBILITY.md">호환성</a>). </p>
+<p>패키지의 리플렉션 데이터에서 생성했습니다(엔진 0.21.0). 속성 이름은 씬 파일에서 쓰는 키입니다. 이름을 바꿔도 별칭이 유지됩니다(<a href="https://github.com/dekiengine/deki-editor/blob/master/COMPATIBILITY.md">호환성</a>). </p>
 </div></div><!-- PageDoc -->
 <a href="doxygen_crawl.html"></a>
 </div><!-- contents -->
