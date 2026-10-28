@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.21.0
 
 ### Changed
 - `F:/` works as on a board: files the game writes under `F:/` go to
