@@ -79,3 +79,7 @@ placement to request (ESP-IDF firmware sets it to `IRAM_ATTR`).
 Apache-2.0. Tactility's SDK is Apache-2.0 and its licence explicitly allows
 closed-source external apps; the GPL parts of Tactility are the firmware, which
 an app does not link against.
+
+## Community
+
+Questions, ideas and what you made with Deki: [the Deki Discord](https://dekiengine.com/discord/).
