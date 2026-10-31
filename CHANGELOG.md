@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.22.0
+
+### Changed
+- `minEngine` 0.22.0: built against engine 0.22.0. A build of this package
+  from before does not load and is rebuilt.
+
 ## 0.21.0
 
 ### Changed
