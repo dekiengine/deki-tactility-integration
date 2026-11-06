@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Sound**: `TactilityAudioSetup` plays deki-audio's output through
+  Tactility's audio stream (the device's speaker, shared with the OS, which
+  resamples and applies the system volume), with a sample rate and a starting
+  volume. Both device boot scenes have it. The output goes back to the OS when
+  the game ends. A project without deki-audio, or a device without a speaker,
+  runs silently. Not yet heard on a device.
+- **Install on a device**: the Build panel's Install puts a device app on a
+  Tactility SD card over USB (Settings > USB, mass storage) or on a device
+  over Wi-Fi (Settings > Development on), through `tools/tt.py`, plain
+  Python 3 with nothing to install. A device build also writes
+  `build/<platform>/export/`: the `.app`, `tt.py`, install scripts and a
+  README, for installing without the editor.
+- `std::thread`, `join`, `detach` and `std::this_thread::sleep_for` in an app,
+  over the pthreads Tactility exports (8 KB stacks).
+
+### Fixed
+- A device build runs ESP-IDF on a machine whose PATH holds an entry with a
+  stray quote (a Windows Kits installer leaves one). The build script's
+  `set "PATH=...%PATH%"` ended at that quote, and export.bat stopped, saying
+  git was missing. The script now sets PATH without the quotes and names the
+  entry, as deki-esp32-integration does.
+
 ## 0.22.0
 
 ### Changed

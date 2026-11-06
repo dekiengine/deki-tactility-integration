@@ -85,6 +85,15 @@ public:
     /// directory; the caller cds where it needs to be.
     static std::string IdfEnvironmentScript(const std::string& idfPath);
 
+    /// Windows: the first lines of a .bat that runs ESP-IDF, when the editor's
+    /// PATH holds an entry with a stray quote (a Windows Kits installer leaves
+    /// one). cmd reads from that quote on as one quoted run, so a
+    /// `set "PATH=...%PATH%"` ends early and nothing behind the entry is found:
+    /// export.bat then reports git missing. These lines set PATH without the
+    /// quotes and say which entry had one. Empty when PATH is fine, and on
+    /// other systems.
+    static std::string PathRepairScript();
+
     /// Whether the SDK for this platform is built and the tool checked out.
     /// Each release script writes a known file last, so that file means
     /// packaging finished.

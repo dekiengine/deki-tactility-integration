@@ -25,6 +25,14 @@
       "componentTypes": [
         "TactilityInputSetup"
       ]
+    },
+    {
+      "id": "audio",
+      "displayName": "Audio",
+      "defaultEnabled": true,
+      "componentTypes": [
+        "TactilityAudioSetup"
+      ]
     }
   ]
 }

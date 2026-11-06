@@ -24,6 +24,7 @@
 
 #include <memory>
 
+#include "TactilityAudio.h"
 #include "TactilityFileSystem.h"
 #include "TactilityMemoryProvider.h"
 #include "TactilityRuntime.h"
@@ -138,7 +139,10 @@ int RunGame()
             }
         });
 
-    return Deki::Main();
+    const int result = Deki::Main();
+    // The speaker's output is the device's only one: give it back.
+    ShutdownAudio();
+    return result;
 }
 
 }  // namespace

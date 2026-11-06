@@ -61,14 +61,41 @@ have to place app code in internal RAM, which is far too small for an engine.
 This is a property of the chips, not of Tactility - Tactility itself supports
 those boards, and small apps run on them fine.
 
+## Installing over Wi-Fi: tt.py
+
+`tools/tt.py` installs a game on a device over Wi-Fi. It is plain Python 3 with
+nothing to `pip install`, and it talks to the device's development service on
+port 6666, the same service Tactility's own `tactility.py` uses.
+
+```
+python tt.py find                        Tactility devices on this network
+python tt.py install Game.app --run      install on the first one found, then start it
+python tt.py install Game.app --host 192.168.1.50
+python tt.py run com.example.mygame --host 192.168.1.50
+python tt.py uninstall com.example.mygame
+```
+
+Tactility does not advertise itself on the network, so `find` probes port 6666
+across the /24 of each of the computer's addresses (a few seconds). On the
+device, connect to Wi-Fi and switch on **Settings > Development** first.
+
+A device build writes `build/<platform>/export/`: the `.app`, `tt.py`,
+`install.bat`, `install.sh` and a README. That folder is everything a player
+needs, without the editor. The `.app` also installs by copying it to the SD card
+and opening it in the device's Files app.
+
+The editor's **Install** button uses `tt.py` for a device too. The target is the
+platform's `frameworkOptions.deviceHost` if set, otherwise the first device
+`find` sees; `--deploy --deploy-target <address>` picks one from the command line.
+
 ## Status
 
-**Unreleased and untested on hardware.** Every source file compiles against the
-Tactility SDK (0.8.0-dev, built from `main`), but no build has yet run on a
-device or in the simulator. The Tactility export target also needs an editor
-change before it can be produced: builder registration goes through a closed
-`MCUFamily` enum, and `BuilderRegistry::LoadBuilderPlugins()` - which already
-exists - is never called.
+**Experimental.** The editor builds a device app (`.app`) and the simulator, and
+installs either from the Build panel. A device app has been installed on a
+T-Deck Plus but not yet seen running, and its sound has not been heard: on
+Tactility nothing comes out of the USB serial port, and the editor's device
+tools talk only to Deki's own firmware. Deki's own firmware for the T-Deck
+(deki-lilygo-boards) is the tested way to run a game on one.
 
 A Tactility build must define `DEKI_TACTILITY_TARGET`, and must define
 `DEKI_FAST_ATTR` as **empty**: the app is a relocated ELF, so there is no IRAM

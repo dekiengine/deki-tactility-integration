@@ -11,5 +11,11 @@
     "Window": "窗口",
     "Feeds Tactility's touch and keyboard into Deki's input system.": "将 Tactility 的触摸和键盘输入传入 Deki 的输入系统。",
     "Gives the game Tactility's display: the whole panel, or a window with the OS still running.": "为游戏提供 Tactility 的显示屏：整个面板，或在系统仍运行时的一个窗口。",
-    "Tactility": "Tactility"
+    "Tactility": "Tactility",
+    "Tactility Audio Setup": "Tactility 音频设置",
+    "Plays Deki's audio through Tactility's speaker.": "通过 Tactility 的扬声器播放 Deki 的音频。",
+    "Sample Rate": "采样率",
+    "Samples per second the game plays at. Tactility resamples to the speaker's own rate, so this is the rate the game's sounds were made at.": "游戏播放时每秒的采样数。Tactility 会重新采样到扬声器自身的采样率，所以这里填游戏音效制作时的采样率。",
+    "Initial Volume": "初始音量",
+    "The game's own volume at startup, 0 to 100. The device's system volume still applies on top.": "游戏启动时自己的音量，0 到 100。设备的系统音量仍会叠加在其上。"
 }

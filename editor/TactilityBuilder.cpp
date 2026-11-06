@@ -281,29 +281,87 @@ public:
         return problems;
     }
 
-    // ---- deploy: the simulator only, over its development service ----------
+    // ---- deploy: over the development service --------------------------------
     //
     // Installs the app without starting it: it appears in the OS's Apps menu
-    // like any other and is opened from there. A device app installs the same
-    // way (tactility.py install <address>), but there is no device build yet,
-    // so a device platform shows no button.
+    // like any other and is opened from there. The simulator installs through
+    // tactility.py; a device through tools/tt.py, which needs no pip packages
+    // and finds the device on the network itself, since Tactility does not
+    // advertise it. A device must be on Wi-Fi with Settings > Development on.
+    //
+    // A device has no target to list unless the platform names one
+    // (frameworkOptions.deviceHost); with none, tt.py installs on the first
+    // device it finds. --deploy-target <address> aims at another.
 
-    bool SupportsDeploy() const override { return IsSimulator(); }
+    bool SupportsDeploy() const override { return m_HasPlatformConfig; }
     const char* GetDeployLabel() const override { return "Install"; }
 
     std::vector<DeployTarget> EnumerateDeployTargets() const override
     {
-        if (!IsSimulator())
+        if (IsSimulator())
         {
-            return {};
+            return { DeployTarget{ "localhost", "Tactility simulator on this machine" } };
         }
-        return { DeployTarget{ "localhost", "Tactility simulator on this machine" } };
+        // A device on USB, as a drive: Settings > USB > mass storage (SD card)
+        // restarts it as one. tt.py unpacks the app onto the card.
+        std::vector<DeployTarget> targets;
+        for (const std::string& drive : TactilityDrives())
+        {
+            targets.push_back({ "usb:" + drive, "Tactility SD card on USB (" + drive + ")" });
+        }
+        const std::string host = m_PlatformConfig.Option("deviceHost");
+        if (!host.empty())
+        {
+            targets.push_back({ host, "Tactility device at " + host + " (Wi-Fi)" });
+        }
+        return targets;
+    }
+
+    // Mounted drives holding a Tactility SD card: tactility/ at the root, the
+    // data folder installed apps live in. What tt.py's usb_drives() finds.
+    static std::vector<std::string> TactilityDrives()
+    {
+        std::vector<std::string> drives;
+        std::error_code ec;
+#ifdef _WIN32
+        for (char letter = 'C'; letter <= 'Z'; ++letter)
+        {
+            const std::string root = std::string(1, letter) + ":\\";
+            if (fs::is_directory(fs::path(root) / "tactility", ec))
+            {
+                drives.push_back(std::string(1, letter) + ":");
+            }
+        }
+#else
+        for (const char* parent : { "/Volumes", "/media", "/run/media", "/mnt" })
+        {
+            for (const auto& entry : fs::directory_iterator(parent, ec))
+            {
+                // /media/<user>/<volume> and /run/media/<user>/<volume> too
+                if (fs::is_directory(entry.path() / "tactility", ec))
+                {
+                    drives.push_back(entry.path().string());
+                    continue;
+                }
+                for (const auto& inner : fs::directory_iterator(entry.path(), ec))
+                {
+                    if (fs::is_directory(inner.path() / "tactility", ec))
+                    {
+                        drives.push_back(inner.path().string());
+                    }
+                }
+            }
+        }
+#endif
+        return drives;
     }
 
     void Deploy(const std::string& projectPath, const std::string& deployTargetId, BuildOutputCallback out,
                 BuildProgressCallback progress) override
     {
-        const std::string host = deployTargetId.empty() ? std::string("localhost") : deployTargetId;
+        const std::string host = !deployTargetId.empty() ? deployTargetId
+                                 : IsSimulator()         ? std::string("localhost")
+                                                         : m_PlatformConfig.Option("deviceHost");
         RunOnBuildThread([this, projectPath, host, out, progress]() { DoDeploy(projectPath, host, out, progress); });
     }
 
@@ -731,7 +789,7 @@ private:
         CMakeGen::EmitProjectSourceCollection(f, "${DEKI_PROJECT_ROOT}/src");
         f << "list(FILTER PROJECT_SOURCES EXCLUDE REGEX \"PluginExports\\\\.cpp$\")\n\n";
 
-        // Packages: the same collection as the desktop simulator's. Each
+        // Packages: the same collection as the desktop build's. Each
         // package's entry is its editor-plugin glue and stays out; the app's
         // entry point is an ordinary source of this package (TactilityApp.cpp).
         // editor/, tests/ and the checked-in generated/ stay out too; the
@@ -848,7 +906,7 @@ private:
 
         // DekiRegisterProjectPackages(): the static package registration a
         // firmware build uses. The engine links its own empty system-init
-        // stub here, as in the desktop simulator, so the init calls go inline.
+        // stub here, as in the desktop build, so the init calls go inline.
         const std::string initName =
             fs::path(CMakeGen::GeneratePackageInitFile(root / "main", allPackages, activeIds,
                                                        fs::path(GetSourceDirectory(projectPath)),
@@ -1219,6 +1277,103 @@ private:
         return {};
     }
 
+    // This package's own directory in the project, where tools/tt.py lives.
+    static fs::path PackageDir(const std::string& projectPath)
+    {
+        for (const auto& pkg : CMakeGen::ScanPackageManifests(projectPath))
+        {
+            if (pkg.id == "deki-tactility-integration")
+            {
+                return fs::path(projectPath) / "packages" / pkg.dirName;
+            }
+        }
+        return {};
+    }
+
+    // tools/tt.py, which installs on a device over Wi-Fi. Plain Python: no
+    // ESP-IDF environment and no pip packages.
+    static std::string TtCommand(const fs::path& tt, const std::string& args)
+    {
+#ifdef _WIN32
+        return "set \"PYTHONUTF8=1\" && python \"" + tt.string() + "\" " + args;
+#else
+        return "PYTHONUTF8=1 python3 \"" + tt.string() + "\" " + args;
+#endif
+    }
+
+    // build/<platform>/export: what a player needs to put the game on a
+    // device without the editor: the .app, tt.py, and a script that installs
+    // the one with the other. The .app also installs from the device's Files
+    // app, copied onto its SD card.
+    std::string WriteExport(const std::string& projectPath, const fs::path& root, const fs::path& app) const
+    {
+        const fs::path exportDir = root / "export";
+        const fs::path tt = PackageDir(projectPath) / "tools" / "tt.py";
+        std::error_code ec;
+        fs::remove_all(exportDir, ec);
+        fs::create_directories(exportDir, ec);
+        if (!fs::is_regular_file(tt, ec))
+        {
+            return "tools/tt.py is missing from the deki-tactility-integration package";
+        }
+        fs::copy_file(app, exportDir / app.filename(), fs::copy_options::overwrite_existing, ec);
+        if (!ec)
+        {
+            fs::copy_file(tt, exportDir / "tt.py", fs::copy_options::overwrite_existing, ec);
+        }
+        if (ec)
+        {
+            return "could not write " + exportDir.string() + ": " + ec.message();
+        }
+
+        const std::string name = AppNameFor(projectPath, m_PlatformConfig);
+        const std::string appId = m_PlatformConfig.Option("appId");
+        {
+            std::ofstream f(exportDir / "install.bat", std::ios::binary);
+            f << "@echo off\r\n"
+              << "rem Installs " << name << " on a Tactility device: over USB when it is on USB as a\r\n"
+              << "rem drive (Settings, USB), else over Wi-Fi. install.bat 192.168.1.50 picks a device.\r\n"
+              << "cd /d \"%~dp0\"\r\n"
+              << "if \"%~1\"==\"\" (python tt.py install --run) else (python tt.py install --run --host %1)\r\n"
+              << "pause\r\n";
+        }
+        {
+            std::ofstream f(exportDir / "install.sh", std::ios::binary);
+            f << "#!/bin/sh\n"
+              << "# Installs " << name << " on a Tactility device: over USB when it is on USB as a\n"
+              << "# drive (Settings > USB), else over Wi-Fi. ./install.sh 192.168.1.50 picks a device.\n"
+              << "cd \"$(dirname \"$0\")\"\n"
+              << "if [ -z \"$1\" ]; then exec python3 tt.py install --run; fi\n"
+              << "exec python3 tt.py install --run --host \"$1\"\n";
+        }
+        fs::permissions(exportDir / "install.sh", fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec,
+                        fs::perm_options::add, ec);
+        {
+            std::ofstream f(exportDir / "README.txt", std::ios::binary);
+            f << name << " for Tactility\n"
+              << "\n"
+              << "Run install.bat (Windows) or ./install.sh. Needs Python 3. It installs over\n"
+              << "USB when the device is on USB as a drive, else over Wi-Fi.\n"
+              << "\n"
+              << "Over USB:\n"
+              << "  1. Plug the device in. On it: Settings > USB > mass storage (SD card).\n"
+              << "     It restarts as a USB drive.\n"
+              << "  2. Run the installer, then eject the drive and reset the device.\n"
+              << "\n"
+              << "Over Wi-Fi:\n"
+              << "  1. On the device, connect to Wi-Fi and switch on Settings > Development.\n"
+              << "  2. Run the installer on a computer on the same network. It finds the device,\n"
+              << "     installs the game and starts it.\n"
+              << "\n"
+              << "tt.py does more: python tt.py find | info | install | run " << appId << " | uninstall " << appId
+              << "\n"
+              << "\n"
+              << "From the SD card: copy " << app.filename().string()
+              << " onto the device's SD card and open it in the Files app.\n";
+        }
+        return {};
+    }
+
     // tactility.py, the pinned copy, run in the app directory with the SDK
     // it was built against. The simulator's compiler is the one its SDK was
     // built with (TactilitySdk::Build finds it the same way); a device app
@@ -1232,6 +1387,8 @@ private:
         f << "@echo off\r\n";
         if (device)
         {
+            // First, so the %PATH% expansions below read a PATH cmd can parse.
+            f << TactilitySdk::PathRepairScript();
             // The reflection generator's compiler, and its directory on PATH:
             // cc1plus finds its DLLs through PATH. Before the export, which
             // puts ESP-IDF's own tools in front of it.
@@ -1392,6 +1549,15 @@ private:
             }
         }
 
+        if (!TactilitySdk::IsPosix(platform))
+        {
+            if (const std::string error = WriteExport(projectPath, root, app); !error.empty())
+            {
+                return Fail(out, progress, error);
+            }
+            Report(out, "Exported to " + (root / "export").string() + " with tt.py, for installing over USB or Wi-Fi", false);
+        }
+
         Report(out, "Built " + app.string(), false);
         SetProgress(BuildState::Completed, "Built " + app.filename().string(), 1.0f);
         if (progress)
@@ -1403,7 +1569,7 @@ private:
     void DoDeploy(const std::string& projectPath, const std::string& host, BuildOutputCallback out,
                   BuildProgressCallback progress)
     {
-        SetProgress(BuildState::Deploying, "Installing on " + host, 0.0f);
+        SetProgress(BuildState::Deploying, "Installing on " + (host.empty() ? std::string("a device on the network") : host), 0.0f);
         if (progress)
         {
             progress(GetProgress());
@@ -1436,7 +1602,12 @@ private:
             }
         }
 
-        // The device must be running, with its development service on.
+        if (!IsSimulator())
+        {
+            return DeployToDevice(projectPath, root, host, out, progress);
+        }
+
+        // The simulator must be running, with its development service on.
         //
         // tactility.py's exit code does not say whether this worked: a refused
         // install prints its failure mark and still exits 0. The mark
@@ -1467,6 +1638,58 @@ private:
         const std::string name = AppNameFor(projectPath, m_PlatformConfig);
         Report(out, "Installed '" + name + "' on " + host + "; open it from the Apps menu", false);
         SetProgress(BuildState::Completed, "Installed on " + host, 1.0f);
+        if (progress)
+        {
+            progress(GetProgress());
+        }
+    }
+
+    // A device over Wi-Fi, through tt.py. An empty host lets tt.py find the
+    // first device on the network. tt.py exits non-zero when anything fails.
+    void DeployToDevice(const std::string& projectPath, const fs::path& root, const std::string& host,
+                        BuildOutputCallback out, BuildProgressCallback progress)
+    {
+        const fs::path tt = PackageDir(projectPath) / "tools" / "tt.py";
+        std::error_code ec;
+        if (!fs::is_regular_file(tt, ec))
+        {
+            return Fail(out, progress, "tools/tt.py is missing from the deki-tactility-integration package");
+        }
+        const fs::path app = root / "build" / (m_PlatformConfig.Option("appId") + ".app");
+        std::string args = "install \"" + app.string() + "\"";
+        const bool usb = host.rfind("usb:", 0) == 0;
+        if (usb)
+        {
+            args += " --usb --drive \"" + host.substr(4) + "\"";
+        }
+        else if (!host.empty())
+        {
+            args += " --host " + host;
+        }
+        const int code = RunShellCommand(
+            TtCommand(tt, args), root.string(),
+            [&out](const std::string& line)
+            {
+                if (out)
+                {
+                    out(line, false);
+                }
+            },
+            &m_CancelRequested);
+        if (code != 0)
+        {
+            return Fail(out, progress,
+                        "Installing on " + (host.empty() ? std::string("a device on this network") : host) +
+                            " failed; tt.py says why above. Over USB the device must be in mass storage "
+                            "mode (Settings > USB); over Wi-Fi, on the network with Settings > Development on.");
+        }
+
+        const std::string name = AppNameFor(projectPath, m_PlatformConfig);
+        Report(out,
+               usb ? "Installed '" + name + "' on the SD card; eject it and reset the device, then open it from the Apps menu"
+                   : "Installed '" + name + "'; open it from the device's Apps menu",
+               false);
+        SetProgress(BuildState::Completed, "Installed", 1.0f);
         if (progress)
         {
             progress(GetProgress());

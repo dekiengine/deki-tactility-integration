@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -530,6 +531,74 @@ std::vector<std::string> TactilitySdk::AppExports(const std::string& platform, s
     return found;
 }
 
+std::string TactilitySdk::PathRepairScript()
+{
+#ifdef _WIN32
+    const char* value = std::getenv("PATH");
+    const std::string path = value ? value : "";
+    if (std::count(path.begin(), path.end(), '"') % 2 == 0)
+    {
+        return {};
+    }
+    // A .bat expands % even inside quotes, and echo needs cmd's other
+    // specials escaped.
+    auto literal = [](const std::string& s)
+    {
+        std::string out;
+        for (char c : s)
+        {
+            if (c == '%')
+            {
+                out += "%%";
+            }
+            else if (c != '"')
+            {
+                out += c;
+            }
+        }
+        return out;
+    };
+    auto echoed = [&literal](const std::string& s)
+    {
+        std::string out;
+        for (char c : literal(s))
+        {
+            if (std::strchr("&|<>^()", c))
+            {
+                out += '^';
+            }
+            out += c;
+        }
+        return out;
+    };
+    std::string lines;
+    size_t start = 0;
+    while (start <= path.size())
+    {
+        size_t end = path.find(';', start);
+        if (end == std::string::npos)
+        {
+            end = path.size();
+        }
+        const std::string entry = path.substr(start, end - start);
+        if (std::count(entry.begin(), entry.end(), '"') % 2 != 0)
+        {
+            lines += "echo [Toolchain] PATH entry " + echoed(entry) +
+                     " has a stray quote, which stops cmd finding anything after it: the build uses it without "
+                     "the quote. Fix it in Windows' environment variables.\r\n";
+        }
+        start = end + 1;
+    }
+    // Every quote goes, not only the stray one: cmd finds a PATH entry the
+    // same with its quotes or without, and none left means none can end the
+    // set early.
+    lines += "set \"PATH=" + literal(path) + "\"\r\n";
+    return lines;
+#else
+    return {};
+#endif
+}
+
 std::string TactilitySdk::IdfEnvironmentScript(const std::string& idfPath)
 {
 #ifdef _WIN32
@@ -730,7 +799,8 @@ std::string TactilitySdk::Build(const std::string& platform, const std::string& 
         script = fs::path(Root()) / ("build-sdk-" + platform + ".bat");
         std::ofstream f(script, std::ios::binary | std::ios::trunc);
         f << "@echo off\r\n"
-          << IdfEnvironmentScript(idfPath) << "cd /d \"" << Native(src.string()) << "\" || exit /b 1\r\n"
+          << PathRepairScript() << IdfEnvironmentScript(idfPath) << "cd /d \"" << Native(src.string())
+          << "\" || exit /b 1\r\n"
           << "python device.py " << device << " || exit /b 1\r\n"
           << "idf.py build || exit /b 1\r\n"
           << "set \"ESP_IDF_VERSION=" << TactilityPin::kIdfMajorMinor << "\"\r\n"

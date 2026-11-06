@@ -9,11 +9,18 @@
 
 #if defined(DEKI_TACTILITY_TARGET) && defined(ESP_PLATFORM) && !defined(DEKI_EDITOR)
 
+#include <pthread.h>
+#include <unistd.h>
+
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
+#include <exception>
 #include <list>
 #include <memory>
+#include <thread>
 #include <typeinfo>
 #include <unordered_map>
 #include <utility>
@@ -186,6 +193,77 @@ void _List_node_base::_M_transfer(_List_node_base* const first, _List_node_base*
 bool _Sp_make_shared_tag::_S_eq(const type_info& ti) noexcept
 {
     return &ti == &_S_ti();
+}
+
+// std::thread over the pthreads Tactility does export. ESP-IDF's libstdc++
+// is built on gthr-posix, so a thread's native handle is a pthread_t, as here.
+
+namespace
+{
+
+// Big enough for a game's worker (ESP-IDF's pthread default is 3 KB).
+constexpr size_t kThreadStackBytes = 8192;
+
+}  // namespace
+
+thread::_State::~_State() = default;
+
+void thread::_M_start_thread(unique_ptr<_State> state, void (*)())
+{
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setstacksize(&attr, kThreadStackBytes);
+    // ESP-IDF's pthread_attr_t owns nothing, so it needs no destroy (which
+    // Tactility does not export).
+    // A lambda here, not a free function: thread::_State is private.
+    void* (*run)(void*) = [](void* p) -> void*
+    {
+        unique_ptr<_State> owned(static_cast<_State*>(p));
+        owned->_M_run();
+        return nullptr;
+    };
+    if (pthread_create(&_M_id._M_thread, &attr, run, state.get()) != 0)
+    {
+        abort();  // libstdc++ throws system_error; there are no exceptions here
+    }
+    state.release();
+}
+
+void thread::join()
+{
+    if (!joinable() || pthread_join(_M_id._M_thread, nullptr) != 0)
+    {
+        abort();
+    }
+    _M_id = id();
+}
+
+void thread::detach()
+{
+    if (!joinable() || pthread_detach(_M_id._M_thread) != 0)
+    {
+        abort();
+    }
+    _M_id = id();
+}
+
+void this_thread::__sleep_for(chrono::seconds s, chrono::nanoseconds ns)
+{
+    // usleep in slices: ESP-IDF's takes any length, but a useconds_t of a
+    // long sleep would overflow.
+    uint64_t us = static_cast<uint64_t>(s.count()) * 1000000u + static_cast<uint64_t>(ns.count() + 999) / 1000u;
+    while (us > 0)
+    {
+        const uint64_t slice = us > 1000000u ? 1000000u : us;
+        usleep(static_cast<useconds_t>(slice));
+        us -= slice;
+    }
+}
+
+// What a joinable std::thread's destructor calls.
+void terminate() noexcept
+{
+    abort();
 }
 
 }  // namespace std

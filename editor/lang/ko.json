@@ -11,5 +11,11 @@
     "Window": "창",
     "Feeds Tactility's touch and keyboard into Deki's input system.": "Tactility의 터치와 키보드 입력을 Deki의 입력 시스템에 전달합니다.",
     "Gives the game Tactility's display: the whole panel, or a window with the OS still running.": "게임에 Tactility의 디스플레이를 제공합니다. 패널 전체를 쓰거나, OS가 계속 실행되는 상태에서 창 하나를 씁니다.",
-    "Tactility": "Tactility"
+    "Tactility": "Tactility",
+    "Tactility Audio Setup": "Tactility 오디오 설정",
+    "Plays Deki's audio through Tactility's speaker.": "Deki의 오디오를 Tactility의 스피커로 재생합니다.",
+    "Sample Rate": "샘플 레이트",
+    "Samples per second the game plays at. Tactility resamples to the speaker's own rate, so this is the rate the game's sounds were made at.": "게임이 재생하는 초당 샘플 수입니다. Tactility가 스피커 고유의 레이트로 변환하므로, 게임 사운드를 만든 레이트를 지정합니다.",
+    "Initial Volume": "초기 볼륨",
+    "The game's own volume at startup, 0 to 100. The device's system volume still applies on top.": "시작할 때 게임 자체의 볼륨으로, 0에서 100까지입니다. 그 위에 기기의 시스템 볼륨이 적용됩니다."
 }

@@ -7,6 +7,8 @@ set(PACKAGE_FILE_PREFIX "Tactility")
 set(PACKAGE_SOURCES
     TactilityDisplaySetup.cpp
     TactilityInputSetup.cpp
+    TactilityAudioSetup.cpp
+    TactilityAudio.cpp
     TactilityDisplay.cpp
     TactilityWindowDisplay.cpp
     TactilityInput.cpp

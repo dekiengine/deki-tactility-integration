@@ -43,6 +43,28 @@
             "x": 0.0,
             "y": 0.0
           }
+        },
+        {
+          "active": true,
+          "children": [],
+          "components": [
+            {
+              "properties": {
+                "initialVolume": 80,
+                "sampleRate": 16000
+              },
+              "type": "DekiTactility::TactilityAudioSetup"
+            }
+          ],
+          "id": 602,
+          "name": "Tactility Audio",
+          "transform": {
+            "rotation": 0.0,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "x": 0.0,
+            "y": 0.0
+          }
         }
       ],
       "components": [
@@ -56,6 +78,10 @@
               {
                 "id": 601,
                 "typeId": 1163087381
+              },
+              {
+                "id": 602,
+                "typeId": 929566779
               }
             ]
           },
