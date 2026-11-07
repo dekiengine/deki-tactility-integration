@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.30.0
+
+### Changed
+- `minEngine` 0.30.0: built against engine 0.30.0. A build of this package
+  from before does not load and is rebuilt.
 
 ### Added
 - **Sound**: `TactilityAudioSetup` plays deki-audio's output through
