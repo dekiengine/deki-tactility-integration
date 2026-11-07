@@ -711,10 +711,14 @@ private:
         const std::vector<std::string> transformDefines = CMakeGen::TransformDefines(transformWidth);
 
         const StripPlan strip = ComputeStripPlan(projectPath, config.id);
-        std::string stripSourceRegex;
+        // A CMake list, tested one pattern at a time: joined with "|", more
+        // than ten left-out components failed to configure ("Too many
+        // parentheses"); a CMake regular expression takes at most ten groups.
+        // One quoted argument each: escaped, a ';' would not separate them.
+        std::string stripSourceRegexes;
         for (const auto& rx : strip.SourceExcludeRegexes())
         {
-            stripSourceRegex += (stripSourceRegex.empty() ? "" : "|") + rx;
+            stripSourceRegexes += " \"" + CMakeGen::EscapeCMakeString(rx) + "\"";
         }
 
         // Everything the game's code is compiled with, and generated under.
@@ -803,7 +807,7 @@ private:
           << "set(_RC_PKG_PREFIXES \"\")\n"
           << "set(_RC_PKG_OUTDIRS \"\")\n"
           << "message(STATUS \"Deki stripping: " << CMakeGen::EscapeCMakeString(strip.summary) << "\")\n"
-          << "set(_DEKI_STRIP_SRC_REGEX \"" << CMakeGen::EscapeCMakeString(stripSourceRegex) << "\")\n";
+          << "set(_DEKI_STRIP_SRC_REGEXES" << stripSourceRegexes << ")\n";
 
         f << "set(_DEKI_ACTIVE_PACKAGES";
         for (const auto& id : activeIds)
@@ -842,9 +846,12 @@ private:
           << "        string(FIND \"${SRC}\" \"/tests/\" _IS_TESTS)\n"
           << "        string(FIND \"${SRC}\" \"/generated/\" _IS_GEN)\n"
           << "        set(_IS_STRIPPED FALSE)\n"
-          << "        if(_DEKI_STRIP_SRC_REGEX AND \"${SRC}\" MATCHES \"${_DEKI_STRIP_SRC_REGEX}\")\n"
-          << "            set(_IS_STRIPPED TRUE)\n"
-          << "        endif()\n"
+          << "        foreach(_RX IN LISTS _DEKI_STRIP_SRC_REGEXES)\n"
+          << "            if(\"${SRC}\" MATCHES \"${_RX}\")\n"
+          << "                set(_IS_STRIPPED TRUE)\n"
+          << "                break()\n"
+          << "            endif()\n"
+          << "        endforeach()\n"
           << "        if(_IS_EDITOR EQUAL -1 AND _IS_TESTS EQUAL -1 AND _IS_GEN EQUAL -1 AND NOT _IS_STRIPPED AND NOT "
              "\"${SRC}\" STREQUAL \"${_ENTRY_PATH}\")\n"
           << "            list(APPEND _ALL_PACKAGE_SOURCES \"${SRC}\")\n"

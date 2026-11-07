@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- The simulator build of a project leaving out more than ten components
+  configures: the sources it leaves out were joined into one regular
+  expression, past CMake's limit of ten groups ("Too many parentheses").
+
 ## 0.30.0
 
 ### Changed
