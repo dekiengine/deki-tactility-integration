@@ -57,7 +57,7 @@
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">deki-tactility-integration<span id="projectnumber">&#160;0.22.0</span>
+   <div id="projectname">deki-tactility-integration<span id="projectnumber">&#160;0.30.0</span>
    </div>
    <div id="projectbrief">Deki 包参考</div>
   </td>
@@ -115,7 +115,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('index.html',''
 <img src="deki-tactility-integration.png" alt=""/>
 </div>
     <p>让 Deki 游戏作为应用运行在 Tactility（面向 ESP32 开发板的操作系统）中，而不是作为占据整个设备的固件。</p>
-<p>仓库：<a href="https://github.com/dekiengine/deki-tactility-integration">github.com/dekiengine/deki-tactility-integration</a> · 最新版本：0.22.0 · 需要引擎 0.22.0 或更高版本 · 依赖：<a href="https://dekiengine.github.io/deki-input/zh/">deki-input</a></p>
+<p>仓库：<a href="https://github.com/dekiengine/deki-tactility-integration">github.com/dekiengine/deki-tactility-integration</a> · 最新版本：0.30.0 · 需要引擎 0.30.0 或更高版本 · 依赖：<a href="https://dekiengine.github.io/deki-input/zh/">deki-input</a></p>
 <p>使用 <span class="tt">DekiEditor --packages-add deki-tactility-integration &lt;project&gt;</span> 或通过包管理器安装。引擎自身的组件和 C++ API 见 <a href="https://dekiengine.github.io/docs/zh/">Deki 文档</a>。</p>
 <p>在编辑器中显示为 **Tactility Integration**。</p>
 <h1 class="doxsection"><a class="anchor" id="components"></a>
@@ -138,6 +138,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('index.html',''
 <td class="markdownTableBodyNone">Display  </td><td class="markdownTableBodyNone">&mdash;  </td><td class="markdownTableBodyNone">开  </td></tr>
 <tr class="markdownTableRowEven">
 <td class="markdownTableBodyNone">Input  </td><td class="markdownTableBodyNone">&mdash;  </td><td class="markdownTableBodyNone">开  </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone">Audio  </td><td class="markdownTableBodyNone">&mdash;  </td><td class="markdownTableBodyNone">开  </td></tr>
 </table>
 <h1 class="doxsection"><a class="anchor" id="component-reference"></a>
 组件参考</h1>
@@ -160,29 +162,34 @@ TactilityInputSetup</h2>
 更新日志</h1>
 <p>更新日志为英文。</p>
 <h2 class="doxsection"><a class="anchor" id="autotoc_md0"></a>
-0.22.0</h2>
+0.30.0</h2>
 <h2 class="doxsection"><a class="anchor" id="autotoc_md1"></a>
+Changed</h2>
+<ul>
+<li><span class="tt">minEngine</span> 0.30.0: built against engine 0.30.0. A build of this package from before does not load and is rebuilt.</li>
+</ul>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md2"></a>
+Added</h2>
+<ul>
+<li><b>Sound</b>: <span class="tt">TactilityAudioSetup</span> plays deki-audio's output through Tactility's audio stream (the device's speaker, shared with the OS, which resamples and applies the system volume), with a sample rate and a starting volume. Both device boot scenes have it. The output goes back to the OS when the game ends. A project without deki-audio, or a device without a speaker, runs silently. Not yet heard on a device.</li>
+<li><b>Install on a device</b>: the Build panel's Install puts a device app on a Tactility SD card over USB (Settings &gt; USB, mass storage) or on a device over Wi-Fi (Settings &gt; Development on), through <span class="tt">tools/tt.py</span>, plain Python 3 with nothing to install. A device build also writes <span class="tt">build/&lt;platform&gt;/export/</span>: the <span class="tt">.app</span>, <span class="tt">tt.py</span>, install scripts and a README, for installing without the editor.</li>
+<li><span class="tt">std::thread</span>, <span class="tt">join</span>, <span class="tt">detach</span> and <span class="tt">std::this_thread::sleep_for</span> in an app, over the pthreads Tactility exports (8 KB stacks).</li>
+</ul>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md3"></a>
+Fixed</h2>
+<ul>
+<li>A device build runs ESP-IDF on a machine whose PATH holds an entry with a stray quote (a Windows Kits installer leaves one). The build script's <span class="tt">set "PATH=...PATH%"</span> ended at that quote, and export.bat stopped, saying git was missing. The script now sets PATH without the quotes and names the entry, as deki-esp32-integration does.</li>
+</ul>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md4"></a>
+0.22.0</h2>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md5"></a>
 Changed</h2>
 <ul>
 <li><span class="tt">minEngine</span> 0.22.0: built against engine 0.22.0. A build of this package from before does not load and is rebuilt.</li>
 </ul>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md2"></a>
-0.21.0</h2>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md3"></a>
-Changed</h2>
-<ul>
-<li><span class="tt">F:/</span> works as on a board: files the game writes under <span class="tt">F:/</span> go to <span class="tt">internal/</span> in the app's user data, read from there when the app's assets have no file of that name, and the assets are never written. Before, a game could not write under <span class="tt">F:/</span> at all on Tactility.</li>
-<li><b>Scenes open from the SD card again.</b> The app gave every allocation to plain <span class="tt">malloc</span>, which puts anything under 16 KB in internal RAM, so a scene's objects and strings took the internal RAM Tactility needs for itself: the SD card driver could not get a DMA buffer, every file read failed, and a scene switch found no scene. <span class="tt">TactilityMemoryProvider</span> uses Tactility's own allocator: ordinary allocations prefer PSRAM, and only what the engine asks to keep internal (with DMA when asked) is internal.</li>
-<li>The temporary frame-timing log (<span class="tt">PROBE</span>, every 2 s) is gone.</li>
-</ul>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md4"></a>
-Fixed</h2>
-<ul>
-<li>Apps that use the Tiled package load again: <span class="tt">strnlen</span>, unsigned 64-bit division (<span class="tt">__udivdi3</span>) and <span class="tt">std::list</span>'s node functions are defined for device apps (<span class="tt">TactilityLibc.c</span>, <span class="tt">TactilityLibcxx.cpp</span>); Tactility does not export them.</li>
-</ul>
 <p>更早的版本：<a href="https://github.com/dekiengine/deki-tactility-integration/blob/master/CHANGELOG.md">CHANGELOG.md</a></p>
 <hr  />
-<p>由包的反射数据生成（引擎 0.22.0）。属性名就是场景文件中使用的键。重命名后会保留别名（<a href="https://github.com/dekiengine/deki-editor/blob/master/COMPATIBILITY.md">兼容性</a>）。 </p>
+<p>由包的反射数据生成（引擎 0.30.0）。属性名就是场景文件中使用的键。重命名后会保留别名（<a href="https://github.com/dekiengine/deki-editor/blob/master/COMPATIBILITY.md">兼容性</a>）。 </p>
 </div></div><!-- PageDoc -->
 <a href="doxygen_crawl.html"></a>
 </div><!-- contents -->
