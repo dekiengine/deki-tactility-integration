@@ -57,7 +57,7 @@
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">deki-tactility-integration<span id="projectnumber">&#160;0.30.0</span>
+   <div id="projectname">deki-tactility-integration<span id="projectnumber">&#160;0.30.3</span>
    </div>
    <div id="projectbrief">Deki 패키지 레퍼런스</div>
   </td>
@@ -115,7 +115,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('index.html',''
 <img src="deki-tactility-integration.png" alt=""/>
 </div>
     <p>Deki 게임을 장치 전체를 차지하는 펌웨어가 아니라, ESP32 보드용 운영체제인 Tactility 안의 앱으로 실행합니다.</p>
-<p>저장소: <a href="https://github.com/dekiengine/deki-tactility-integration">github.com/dekiengine/deki-tactility-integration</a> · 최신 릴리스: 0.30.0 · 엔진 0.30.0 이상 필요 · 의존: <a href="https://dekiengine.github.io/deki-input/ko/">deki-input</a></p>
+<p>저장소: <a href="https://github.com/dekiengine/deki-tactility-integration">github.com/dekiengine/deki-tactility-integration</a> · 최신 릴리스: 0.30.1 · 엔진 0.30.0 이상 필요 · 의존: <a href="https://dekiengine.github.io/deki-input/ko/">deki-input</a></p>
 <p><span class="tt">DekiEditor --packages-add deki-tactility-integration &lt;project&gt;</span> 또는 패키지 관리자로 설치합니다. 엔진 자체의 컴포넌트와 C++ API는 <a href="https://dekiengine.github.io/docs/ko/">Deki 문서</a>에 있습니다.</p>
 <p>에디터에는 <b>Tactility Integration</b>(으)로 표시됩니다.</p>
 <h1 class="doxsection"><a class="anchor" id="components"></a>
@@ -124,8 +124,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('index.html',''
 <tr class="markdownTableHead">
 <th class="markdownTableHeadNone">컴포넌트  </th><th class="markdownTableHeadNone">카테고리  </th><th class="markdownTableHeadNone">설명  </th></tr>
 <tr class="markdownTableRowOdd">
-<td class="markdownTableBodyNone"><a class="el" href="#c-tactilitydisplaysetup" title="TactilityDisplaySetup">TactilityDisplaySetup</a>  </td><td class="markdownTableBodyNone">Tactility  </td><td class="markdownTableBodyNone">게임에 Tactility의 디스플레이를 제공합니다. 패널 전체를 쓰거나, OS가 계속 실행되는 상태에서 창 하나를 씁니다.  </td></tr>
+<td class="markdownTableBodyNone"><a class="el" href="#c-tactilityaudiosetup" title="TactilityAudioSetup">TactilityAudioSetup</a>  </td><td class="markdownTableBodyNone">Tactility  </td><td class="markdownTableBodyNone">Deki의 오디오를 Tactility의 스피커로 재생합니다.  </td></tr>
 <tr class="markdownTableRowEven">
+<td class="markdownTableBodyNone"><a class="el" href="#c-tactilitydisplaysetup" title="TactilityDisplaySetup">TactilityDisplaySetup</a>  </td><td class="markdownTableBodyNone">Tactility  </td><td class="markdownTableBodyNone">게임에 Tactility의 디스플레이를 제공합니다. 패널 전체를 쓰거나, OS가 계속 실행되는 상태에서 창 하나를 씁니다.  </td></tr>
+<tr class="markdownTableRowOdd">
 <td class="markdownTableBodyNone"><a class="el" href="#c-tactilityinputsetup" title="TactilityInputSetup">TactilityInputSetup</a>  </td><td class="markdownTableBodyNone">Tactility  </td><td class="markdownTableBodyNone">Tactility의 터치와 키보드 입력을 Deki의 입력 시스템에 전달합니다.  </td></tr>
 </table>
 <h1 class="doxsection"><a class="anchor" id="feature-flags"></a>
@@ -143,6 +145,18 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('index.html',''
 </table>
 <h1 class="doxsection"><a class="anchor" id="component-reference"></a>
 컴포넌트 레퍼런스</h1>
+<h2 class="doxsection"><a class="anchor" id="c-tactilityaudiosetup"></a>
+TactilityAudioSetup</h2>
+<p>Deki의 오디오를 Tactility의 스피커로 재생합니다.</p>
+<p>인스펙터 이름: Tactility 오디오 설정 · 카테고리: Tactility · 유형: <span class="tt">DekiTactility::TactilityAudioSetup</span></p>
+<table class="markdownTable">
+<tr class="markdownTableHead">
+<th class="markdownTableHeadNone">속성  </th><th class="markdownTableHeadNone">유형  </th><th class="markdownTableHeadNone">기본값  </th><th class="markdownTableHeadNone">제약  </th><th class="markdownTableHeadNone">설명  </th></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone"><span class="tt">sampleRate</span>  </td><td class="markdownTableBodyNone">int32  </td><td class="markdownTableBodyNone"><span class="tt">16000</span>  </td><td class="markdownTableBodyNone">8000~48000  </td><td class="markdownTableBodyNone">게임이 재생하는 초당 샘플 수입니다. Tactility가 스피커 고유의 레이트로 변환하므로, 게임 사운드를 만든 레이트를 지정합니다.  </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyNone"><span class="tt">initialVolume</span>  </td><td class="markdownTableBodyNone">int32  </td><td class="markdownTableBodyNone"><span class="tt">80</span>  </td><td class="markdownTableBodyNone">0~100  </td><td class="markdownTableBodyNone">시작할 때 게임 자체의 볼륨으로, 0에서 100까지입니다. 그 위에 기기의 시스템 볼륨이 적용됩니다.  </td></tr>
+</table>
 <h2 class="doxsection"><a class="anchor" id="c-tactilitydisplaysetup"></a>
 TactilityDisplaySetup</h2>
 <p>게임에 Tactility의 디스플레이를 제공합니다. 패널 전체를 쓰거나, OS가 계속 실행되는 상태에서 창 하나를 씁니다.</p>
@@ -162,34 +176,34 @@ TactilityInputSetup</h2>
 변경 내역</h1>
 <p>변경 내역은 영어로 되어 있습니다.</p>
 <h2 class="doxsection"><a class="anchor" id="autotoc_md0"></a>
-0.30.0</h2>
+0.30.1</h2>
 <h2 class="doxsection"><a class="anchor" id="autotoc_md1"></a>
+Fixed</h2>
+<ul>
+<li>The simulator build of a project leaving out more than ten components configures: the sources it leaves out were joined into one regular expression, past CMake's limit of ten groups ("Too many parentheses").</li>
+</ul>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md2"></a>
+0.30.0</h2>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md3"></a>
 Changed</h2>
 <ul>
 <li><span class="tt">minEngine</span> 0.30.0: built against engine 0.30.0. A build of this package from before does not load and is rebuilt.</li>
 </ul>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md2"></a>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md4"></a>
 Added</h2>
 <ul>
 <li><b>Sound</b>: <span class="tt">TactilityAudioSetup</span> plays deki-audio's output through Tactility's audio stream (the device's speaker, shared with the OS, which resamples and applies the system volume), with a sample rate and a starting volume. Both device boot scenes have it. The output goes back to the OS when the game ends. A project without deki-audio, or a device without a speaker, runs silently. Not yet heard on a device.</li>
 <li><b>Install on a device</b>: the Build panel's Install puts a device app on a Tactility SD card over USB (Settings &gt; USB, mass storage) or on a device over Wi-Fi (Settings &gt; Development on), through <span class="tt">tools/tt.py</span>, plain Python 3 with nothing to install. A device build also writes <span class="tt">build/&lt;platform&gt;/export/</span>: the <span class="tt">.app</span>, <span class="tt">tt.py</span>, install scripts and a README, for installing without the editor.</li>
 <li><span class="tt">std::thread</span>, <span class="tt">join</span>, <span class="tt">detach</span> and <span class="tt">std::this_thread::sleep_for</span> in an app, over the pthreads Tactility exports (8 KB stacks).</li>
 </ul>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md3"></a>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md5"></a>
 Fixed</h2>
 <ul>
 <li>A device build runs ESP-IDF on a machine whose PATH holds an entry with a stray quote (a Windows Kits installer leaves one). The build script's <span class="tt">set "PATH=...PATH%"</span> ended at that quote, and export.bat stopped, saying git was missing. The script now sets PATH without the quotes and names the entry, as deki-esp32-integration does.</li>
 </ul>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md4"></a>
-0.22.0</h2>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md5"></a>
-Changed</h2>
-<ul>
-<li><span class="tt">minEngine</span> 0.22.0: built against engine 0.22.0. A build of this package from before does not load and is rebuilt.</li>
-</ul>
 <p>이전 릴리스: <a href="https://github.com/dekiengine/deki-tactility-integration/blob/master/CHANGELOG.md">CHANGELOG.md</a></p>
 <hr  />
-<p>패키지의 리플렉션 데이터에서 생성했습니다(엔진 0.30.0). 속성 이름은 씬 파일에서 쓰는 키입니다. 이름을 바꿔도 별칭이 유지됩니다(<a href="https://github.com/dekiengine/deki-editor/blob/master/COMPATIBILITY.md">호환성</a>). </p>
+<p>패키지의 리플렉션 데이터에서 생성했습니다(엔진 0.30.3). 속성 이름은 씬 파일에서 쓰는 키입니다. 이름을 바꿔도 별칭이 유지됩니다(<a href="https://github.com/dekiengine/deki-editor/blob/master/COMPATIBILITY.md">호환성</a>). </p>
 </div></div><!-- PageDoc -->
 <a href="doxygen_crawl.html"></a>
 </div><!-- contents -->

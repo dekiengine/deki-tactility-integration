@@ -56,7 +56,7 @@
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">deki-tactility-integration<span id="projectnumber">&#160;0.30.0</span>
+   <div id="projectname">deki-tactility-integration<span id="projectnumber">&#160;0.30.3</span>
    </div>
    <div id="projectbrief">Deki package reference</div>
   </td>
@@ -114,7 +114,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('index.html',''
 <img src="deki-tactility-integration.png" alt=""/>
 </div>
     <p>Runs a Deki game as a Tactility app. Builds and installs into the Tactility simulator; the on-device build is not written yet</p>
-<p>Repository: <a href="https://github.com/dekiengine/deki-tactility-integration">github.com/dekiengine/deki-tactility-integration</a> · Latest release: 0.30.0 · Needs engine 0.30.0+ · Requires: <a href="https://dekiengine.github.io/deki-input/">deki-input</a></p>
+<p>Repository: <a href="https://github.com/dekiengine/deki-tactility-integration">github.com/dekiengine/deki-tactility-integration</a> · Latest release: 0.30.1 · Needs engine 0.30.0+ · Requires: <a href="https://dekiengine.github.io/deki-input/">deki-input</a></p>
 <p>Install with <span class="tt">DekiEditor --packages-add deki-tactility-integration &lt;project&gt;</span>, or from the Package Manager. The engine's own components and C++ API are in the <a href="https://dekiengine.github.io/docs/">Deki docs</a>.</p>
 <p>Shown in the editor as <b>Tactility Integration</b>.</p>
 <h1 class="doxsection"><a class="anchor" id="components"></a>
@@ -123,8 +123,10 @@ Components</h1>
 <tr class="markdownTableHead">
 <th class="markdownTableHeadNone">Component  </th><th class="markdownTableHeadNone">Category  </th><th class="markdownTableHeadNone">Description  </th></tr>
 <tr class="markdownTableRowOdd">
-<td class="markdownTableBodyNone"><a class="el" href="#c-tactilitydisplaysetup" title="TactilityDisplaySetup">TactilityDisplaySetup</a>  </td><td class="markdownTableBodyNone">Tactility  </td><td class="markdownTableBodyNone">Gives the game Tactility's display: the whole panel, or a window with the OS still running.  </td></tr>
+<td class="markdownTableBodyNone"><a class="el" href="#c-tactilityaudiosetup" title="TactilityAudioSetup">TactilityAudioSetup</a>  </td><td class="markdownTableBodyNone">Tactility  </td><td class="markdownTableBodyNone">Plays Deki's audio through Tactility's speaker.  </td></tr>
 <tr class="markdownTableRowEven">
+<td class="markdownTableBodyNone"><a class="el" href="#c-tactilitydisplaysetup" title="TactilityDisplaySetup">TactilityDisplaySetup</a>  </td><td class="markdownTableBodyNone">Tactility  </td><td class="markdownTableBodyNone">Gives the game Tactility's display: the whole panel, or a window with the OS still running.  </td></tr>
+<tr class="markdownTableRowOdd">
 <td class="markdownTableBodyNone"><a class="el" href="#c-tactilityinputsetup" title="TactilityInputSetup">TactilityInputSetup</a>  </td><td class="markdownTableBodyNone">Tactility  </td><td class="markdownTableBodyNone">Feeds Tactility's touch and keyboard into Deki's input system.  </td></tr>
 </table>
 <h1 class="doxsection"><a class="anchor" id="feature-flags"></a>
@@ -142,6 +144,18 @@ Feature flags</h1>
 </table>
 <h1 class="doxsection"><a class="anchor" id="component-reference"></a>
 Component reference</h1>
+<h2 class="doxsection"><a class="anchor" id="c-tactilityaudiosetup"></a>
+TactilityAudioSetup</h2>
+<p>Plays Deki's audio through Tactility's speaker.</p>
+<p>Inspector name: Tactility Audio Setup · Category: Tactility · Type: <span class="tt">DekiTactility::TactilityAudioSetup</span></p>
+<table class="markdownTable">
+<tr class="markdownTableHead">
+<th class="markdownTableHeadNone">Property  </th><th class="markdownTableHeadNone">Type  </th><th class="markdownTableHeadNone">Default  </th><th class="markdownTableHeadNone">Constraints  </th><th class="markdownTableHeadNone">Description  </th></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone"><span class="tt">sampleRate</span>  </td><td class="markdownTableBodyNone">int32  </td><td class="markdownTableBodyNone"><span class="tt">16000</span>  </td><td class="markdownTableBodyNone">8000 to 48000  </td><td class="markdownTableBodyNone">Samples per second the game plays at. Tactility resamples to the speaker's own rate, so this is the rate the game's sounds were made at.  </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyNone"><span class="tt">initialVolume</span>  </td><td class="markdownTableBodyNone">int32  </td><td class="markdownTableBodyNone"><span class="tt">80</span>  </td><td class="markdownTableBodyNone">0 to 100  </td><td class="markdownTableBodyNone">The game's own volume at startup, 0 to 100. The device's system volume still applies on top.  </td></tr>
+</table>
 <h2 class="doxsection"><a class="anchor" id="c-tactilitydisplaysetup"></a>
 TactilityDisplaySetup</h2>
 <p>Gives the game Tactility's display: the whole panel, or a window with the OS still running.</p>
@@ -160,34 +174,34 @@ TactilityInputSetup</h2>
 <h1 class="doxsection"><a class="anchor" id="changelog"></a>
 Changelog</h1>
 <h2 class="doxsection"><a class="anchor" id="autotoc_md0"></a>
-0.30.0</h2>
+0.30.1</h2>
 <h2 class="doxsection"><a class="anchor" id="autotoc_md1"></a>
+Fixed</h2>
+<ul>
+<li>The simulator build of a project leaving out more than ten components configures: the sources it leaves out were joined into one regular expression, past CMake's limit of ten groups ("Too many parentheses").</li>
+</ul>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md2"></a>
+0.30.0</h2>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md3"></a>
 Changed</h2>
 <ul>
 <li><span class="tt">minEngine</span> 0.30.0: built against engine 0.30.0. A build of this package from before does not load and is rebuilt.</li>
 </ul>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md2"></a>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md4"></a>
 Added</h2>
 <ul>
 <li><b>Sound</b>: <span class="tt">TactilityAudioSetup</span> plays deki-audio's output through Tactility's audio stream (the device's speaker, shared with the OS, which resamples and applies the system volume), with a sample rate and a starting volume. Both device boot scenes have it. The output goes back to the OS when the game ends. A project without deki-audio, or a device without a speaker, runs silently. Not yet heard on a device.</li>
 <li><b>Install on a device</b>: the Build panel's Install puts a device app on a Tactility SD card over USB (Settings &gt; USB, mass storage) or on a device over Wi-Fi (Settings &gt; Development on), through <span class="tt">tools/tt.py</span>, plain Python 3 with nothing to install. A device build also writes <span class="tt">build/&lt;platform&gt;/export/</span>: the <span class="tt">.app</span>, <span class="tt">tt.py</span>, install scripts and a README, for installing without the editor.</li>
 <li><span class="tt">std::thread</span>, <span class="tt">join</span>, <span class="tt">detach</span> and <span class="tt">std::this_thread::sleep_for</span> in an app, over the pthreads Tactility exports (8 KB stacks).</li>
 </ul>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md3"></a>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md5"></a>
 Fixed</h2>
 <ul>
 <li>A device build runs ESP-IDF on a machine whose PATH holds an entry with a stray quote (a Windows Kits installer leaves one). The build script's <span class="tt">set "PATH=...PATH%"</span> ended at that quote, and export.bat stopped, saying git was missing. The script now sets PATH without the quotes and names the entry, as deki-esp32-integration does.</li>
 </ul>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md4"></a>
-0.22.0</h2>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md5"></a>
-Changed</h2>
-<ul>
-<li><span class="tt">minEngine</span> 0.22.0: built against engine 0.22.0. A build of this package from before does not load and is rebuilt.</li>
-</ul>
 <p>Earlier releases: <a href="https://github.com/dekiengine/deki-tactility-integration/blob/master/CHANGELOG.md">CHANGELOG.md</a>.</p>
 <hr  />
-<p>Generated from the package's reflection data (engine 0.30.0). Property names are the keys used in scene files. Renames keep an alias (<a href="https://github.com/dekiengine/deki-editor/blob/master/COMPATIBILITY.md">compatibility</a>). </p>
+<p>Generated from the package's reflection data (engine 0.30.3). Property names are the keys used in scene files. Renames keep an alias (<a href="https://github.com/dekiengine/deki-editor/blob/master/COMPATIBILITY.md">compatibility</a>). </p>
 </div></div><!-- PageDoc -->
 <a href="doxygen_crawl.html"></a>
 </div><!-- contents -->

@@ -28,16 +28,17 @@ var NAVTREE =
     [ "컴포넌트", "index.html#components", null ],
     [ "기능 플래그", "index.html#feature-flags", null ],
     [ "컴포넌트 레퍼런스", "index.html#component-reference", [
+      [ "TactilityAudioSetup", "index.html#c-tactilityaudiosetup", null ],
       [ "TactilityDisplaySetup", "index.html#c-tactilitydisplaysetup", null ],
       [ "TactilityInputSetup", "index.html#c-tactilityinputsetup", null ]
     ] ],
     [ "변경 내역", "index.html#changelog", [
-      [ "0.30.0", "index.html#autotoc_md0", null ],
-      [ "Changed", "index.html#autotoc_md1", null ],
-      [ "Added", "index.html#autotoc_md2", null ],
-      [ "Fixed", "index.html#autotoc_md3", null ],
-      [ "0.22.0", "index.html#autotoc_md4", null ],
-      [ "Changed", "index.html#autotoc_md5", null ]
+      [ "0.30.1", "index.html#autotoc_md0", null ],
+      [ "Fixed", "index.html#autotoc_md1", null ],
+      [ "0.30.0", "index.html#autotoc_md2", null ],
+      [ "Changed", "index.html#autotoc_md3", null ],
+      [ "Added", "index.html#autotoc_md4", null ],
+      [ "Fixed", "index.html#autotoc_md5", null ]
     ] ]
   ] ]
 ];
