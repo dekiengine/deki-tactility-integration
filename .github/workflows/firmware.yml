@@ -10,7 +10,7 @@ name: Firmware
 
 on:
   schedule:
-    - cron: '0 4 * * *'
+    - cron: '43 4 * * *'
   workflow_dispatch:
 
 concurrency:
@@ -24,6 +24,9 @@ env:
   PLATFORM: tactility_tdeck_plus
   CMAKE_BUILD_TYPE: Release
   CCACHE_MAXSIZE: 1500M
+  # By content, not by time: ESP-IDF writes its specs file again at each
+  # configure, and this runner's ccache hashes that file's time.
+  CCACHE_COMPILERCHECK: content
 
 jobs:
   tactility:
@@ -32,12 +35,12 @@ jobs:
     timeout-minutes: 120
     steps:
       - name: Check out the package
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: packages/deki-tactility-integration
 
       - name: Check out deki-editor
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: dekiengine/deki-editor
           path: deki-editor
@@ -48,7 +51,7 @@ jobs:
         run: git -C deki-editor submodule update --init --depth=1
 
       - name: Check out deki-demo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: dekiengine/deki-demo
           path: deki-demo
@@ -112,18 +115,19 @@ jobs:
       # warm next time.
       - name: Restore fetched dependencies
         id: deps
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: |
             ${{ runner.temp }}/w/deki-editor/build/_deps
             !${{ runner.temp }}/w/deki-editor/build/_deps/*-build
           key: deps-linux-${{ steps.keys.outputs.deps }}
+          restore-keys: deps-linux-
 
       # The editor's objects and the app's (ESP-IDF's ccache, below), so a new
       # key every run: the newest cache of the same editor commit comes back
       # first, then any.
       - name: Restore compiler output
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ runner.temp }}/ccache
           key: ccache-firmware-${{ steps.keys.outputs.editor }}-${{ github.run_id }}
@@ -136,7 +140,7 @@ jobs:
       # them.
       - name: Restore ESP-IDF
         id: idf
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: |
             ${{ steps.keys.outputs.toolchains }}/espressif
@@ -150,7 +154,7 @@ jobs:
       # needs the sources.
       - name: Restore the TactilitySDK
         id: sdk
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: |
             ${{ steps.keys.outputs.sdk }}/sdk
@@ -168,7 +172,7 @@ jobs:
 
       - name: Save fetched dependencies
         if: always() && steps.deps.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: |
             ${{ runner.temp }}/w/deki-editor/build/_deps
@@ -205,7 +209,7 @@ jobs:
 
       - name: Save ESP-IDF
         if: always() && steps.idf.outputs.cache-hit != 'true' && steps.install.outputs.idf == 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: |
             ${{ steps.keys.outputs.toolchains }}/espressif
@@ -229,7 +233,7 @@ jobs:
 
       - name: Save compiler output
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ runner.temp }}/ccache
           key: ccache-firmware-${{ steps.keys.outputs.editor }}-${{ github.run_id }}
@@ -246,7 +250,7 @@ jobs:
           fi
 
       - name: Save the TactilitySDK
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         if: always() && steps.sdk-complete.outputs.save == 'true'
         with:
           path: |
@@ -255,7 +259,7 @@ jobs:
           key: tactility-sdk-esp32s3-${{ steps.keys.outputs.tactility }}
 
       - name: Upload the app
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tactility-${{ env.PLATFORM }}
           path: ${{ runner.temp }}/app
