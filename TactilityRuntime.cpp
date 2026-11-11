@@ -19,7 +19,7 @@ extern "C"
 void* __dso_handle = &__dso_handle;
 
 // Ends of the constructor tables, from the link script.
-typedef void (*DekiCtor)();
+using DekiCtor = void (*)();
 extern DekiCtor __deki_ctors_start[];
 extern DekiCtor __deki_ctors_end[];
 extern DekiCtor __deki_init_array_start[];

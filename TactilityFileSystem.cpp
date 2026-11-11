@@ -195,14 +195,14 @@ Deki::IFileSystem::FileHandle TactilityFileSystem::OpenFile(const char* path, Op
     {
         MakeParents(resolved);
     }
-    return (FileHandle)std::fopen(resolved.c_str(), ModeToStdio(mode));
+    return static_cast<FileHandle>(std::fopen(resolved.c_str(), ModeToStdio(mode)));
 }
 
 void TactilityFileSystem::CloseFile(FileHandle handle)
 {
     if (handle != nullptr)
     {
-        std::fclose((FILE*)handle);
+        std::fclose(static_cast<FILE*>(handle));
     }
 }
 
@@ -212,7 +212,7 @@ size_t TactilityFileSystem::ReadFile(FileHandle handle, void* buffer, size_t siz
     {
         return 0;
     }
-    return std::fread(buffer, 1, size, (FILE*)handle);
+    return std::fread(buffer, 1, size, static_cast<FILE*>(handle));
 }
 
 size_t TactilityFileSystem::WriteFile(FileHandle handle, const void* buffer, size_t size)
@@ -221,7 +221,7 @@ size_t TactilityFileSystem::WriteFile(FileHandle handle, const void* buffer, siz
     {
         return 0;
     }
-    return std::fwrite(buffer, 1, size, (FILE*)handle);
+    return std::fwrite(buffer, 1, size, static_cast<FILE*>(handle));
 }
 
 long TactilityFileSystem::SeekFile(FileHandle handle, long offset, SeekOrigin origin)
@@ -230,7 +230,7 @@ long TactilityFileSystem::SeekFile(FileHandle handle, long offset, SeekOrigin or
     {
         return -1;
     }
-    return std::fseek((FILE*)handle, offset, OriginToStdio(origin));
+    return std::fseek(static_cast<FILE*>(handle), offset, OriginToStdio(origin));
 }
 
 long TactilityFileSystem::TellFile(FileHandle handle)
@@ -239,7 +239,7 @@ long TactilityFileSystem::TellFile(FileHandle handle)
     {
         return -1;
     }
-    return std::ftell((FILE*)handle);
+    return std::ftell(static_cast<FILE*>(handle));
 }
 
 long TactilityFileSystem::GetFileSize(FileHandle handle)
@@ -249,7 +249,7 @@ long TactilityFileSystem::GetFileSize(FileHandle handle)
         return -1;
     }
 
-    FILE* file = (FILE*)handle;
+    FILE* file = static_cast<FILE*>(handle);
     const long current = std::ftell(file);
     if (current < 0 || std::fseek(file, 0, SEEK_END) != 0)
     {

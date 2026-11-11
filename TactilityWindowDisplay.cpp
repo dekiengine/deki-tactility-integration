@@ -119,13 +119,15 @@ bool TactilityWindowDisplay::Initialize(int32_t, int32_t)
     // and the window shows that 1:1, centred.
     m_Width = DEKI_SCREEN_WIDTH;
     m_Height = DEKI_SCREEN_HEIGHT;
-    m_Buffer = Deki::Memory::AllocateArray<uint8_t>((size_t)m_Width * (size_t)m_Height * 2, Deki::Memory::External);
+    m_Buffer = Deki::Memory::AllocateArray<uint8_t>(static_cast<size_t>(m_Width) * static_cast<size_t>(m_Height) * 2,
+                                                    Deki::Memory::External);
     if (m_Buffer == nullptr)
     {
-        DEKI_LOG_ERROR("TactilityWindowDisplay: no memory for a %dx%d canvas", (int)m_Width, (int)m_Height);
+        DEKI_LOG_ERROR("TactilityWindowDisplay: no memory for a %dx%d canvas", static_cast<int>(m_Width),
+                       static_cast<int>(m_Height));
         return false;
     }
-    std::memset(m_Buffer, 0, (size_t)m_Width * (size_t)m_Height * 2);
+    std::memset(m_Buffer, 0, static_cast<size_t>(m_Width) * static_cast<size_t>(m_Height) * 2);
 
     s_ActiveWindow = this;
     // Builds the canvas right away (the new window is on top), on LVGL's
@@ -140,7 +142,8 @@ bool TactilityWindowDisplay::Initialize(int32_t, int32_t)
     }
 
     m_Initialized = true;
-    DEKI_LOG_INFO("TactilityWindowDisplay: %dx%d in an app window", (int)m_Width, (int)m_Height);
+    DEKI_LOG_INFO("TactilityWindowDisplay: %dx%d in an app window", static_cast<int>(m_Width),
+                  static_cast<int>(m_Height));
     return true;
 }
 
@@ -308,10 +311,11 @@ void TactilityWindowDisplay::CopyRect(const uint8_t* framebuffer, int fbWidth, i
     {
         return;
     }
-    const size_t rowBytes = (size_t)(x1 - x0) * 2;
+    const size_t rowBytes = static_cast<size_t>(x1 - x0) * 2;
     for (int32_t y = y0; y < y1; ++y)
     {
-        std::memcpy(m_Buffer + ((size_t)y * m_Width + x0) * 2, framebuffer + ((size_t)y * fbWidth + x0) * 2, rowBytes);
+        std::memcpy(m_Buffer + (static_cast<size_t>(y) * m_Width + x0) * 2,
+                    framebuffer + (static_cast<size_t>(y) * fbWidth + x0) * 2, rowBytes);
     }
 }
 
@@ -327,7 +331,8 @@ void TactilityWindowDisplay::PresentRegions(const uint8_t* framebuffer, int widt
         static bool s_Warned = false;
         if (!s_Warned)
         {
-            DEKI_LOG_ERROR("TactilityWindowDisplay: frames are format %d; the window shows RGB565 only", (int)format);
+            DEKI_LOG_ERROR("TactilityWindowDisplay: frames are format %d; the window shows RGB565 only",
+                           static_cast<int>(format));
         }
         s_Warned = true;
         return;

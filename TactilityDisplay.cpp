@@ -109,7 +109,8 @@ bool TactilityDisplay::Initialize(int32_t width, int32_t height)
     bool needsByteSwap = false;
     if (!MapPanelFormat(panelFormat, &m_PanelFormat, &needsByteSwap))
     {
-        DEKI_LOG_ERROR("TactilityDisplay: panel colour format %d has no Deki equivalent", (int)panelFormat);
+        DEKI_LOG_ERROR("TactilityDisplay: panel colour format %d has no Deki equivalent",
+                       static_cast<int>(panelFormat));
         Shutdown();
         return false;
     }
@@ -121,16 +122,16 @@ bool TactilityDisplay::Initialize(int32_t width, int32_t height)
     m_DisplayHeight = display_get_resolution_y(m_Device);
     if (m_DisplayWidth <= 0 || m_DisplayHeight <= 0)
     {
-        DEKI_LOG_ERROR("TactilityDisplay: panel reported a %dx%d resolution", (int)m_DisplayWidth,
-                       (int)m_DisplayHeight);
+        DEKI_LOG_ERROR("TactilityDisplay: panel reported a %dx%d resolution", static_cast<int>(m_DisplayWidth),
+                       static_cast<int>(m_DisplayHeight));
         Shutdown();
         return false;
     }
     // 0x0 means the caller has no expectation to check against.
     if (width > 0 && height > 0 && (width != m_DisplayWidth || height != m_DisplayHeight))
     {
-        DEKI_LOG_WARNING("TactilityDisplay: project expects %dx%d, panel is %dx%d", (int)width, (int)height,
-                         (int)m_DisplayWidth, (int)m_DisplayHeight);
+        DEKI_LOG_WARNING("TactilityDisplay: project expects %dx%d, panel is %dx%d", static_cast<int>(width),
+                         static_cast<int>(height), static_cast<int>(m_DisplayWidth), static_cast<int>(m_DisplayHeight));
     }
 
     // A panel that promises never to DMA from the caller's pointer gets the
@@ -159,8 +160,8 @@ bool TactilityDisplay::Initialize(int32_t width, int32_t height)
 
     m_Initialized = true;
     const bool async = StartAsyncPresent();
-    DEKI_LOG_INFO("TactilityDisplay: %dx%d, format %d, staging=%s, frames sent %s", (int)m_DisplayWidth,
-                  (int)m_DisplayHeight, (int)panelFormat, m_Band ? "yes" : "direct",
+    DEKI_LOG_INFO("TactilityDisplay: %dx%d, format %d, staging=%s, frames sent %s", static_cast<int>(m_DisplayWidth),
+                  static_cast<int>(m_DisplayHeight), static_cast<int>(panelFormat), m_Band ? "yes" : "direct",
                   async ? "from the other core" : "as drawn");
     return true;
 }
@@ -181,7 +182,7 @@ bool TactilityDisplay::StartAsyncPresent()
         m_FrameReady == nullptr)
     {
         DEKI_LOG_WARNING("TactilityDisplay: no memory for two %u-byte frame copies; frames are sent as they are drawn",
-                         (unsigned)bytes);
+                         static_cast<unsigned>(bytes));
         StopAsyncPresent();
         return false;
     }
@@ -261,7 +262,7 @@ void TactilityDisplay::QueueFrame(const uint8_t* framebuffer, int width, int hei
     if (count < 0)
     {
         frame.rects.push_back({ 0, 0, width, height });
-        std::memcpy(frame.pixels, framebuffer, stride * (size_t)height);
+        std::memcpy(frame.pixels, framebuffer, stride * static_cast<size_t>(height));
     }
     else
     {
@@ -277,8 +278,9 @@ void TactilityDisplay::QueueFrame(const uint8_t* framebuffer, int width, int hei
                 continue;
             }
             frame.rects.push_back(r);
-            std::memcpy(frame.pixels + (size_t)r.top * stride, framebuffer + (size_t)r.top * stride,
-                        stride * (size_t)(r.bottom - r.top));
+            std::memcpy(frame.pixels + static_cast<size_t>(r.top) * stride,
+                        framebuffer + static_cast<size_t>(r.top) * stride,
+                        stride * static_cast<size_t>(r.bottom - r.top));
         }
     }
     xQueueSend(static_cast<QueueHandle_t>(m_FrameReady), &index, portMAX_DELAY);
@@ -437,7 +439,8 @@ void TactilityDisplay::PushRect(const uint8_t* framebuffer, int fbWidth, Deki::C
 {
     if (format != m_PanelFormat)
     {
-        DEKI_LOG_ERROR("TactilityDisplay: frame is format %d but the panel is %d", (int)format, (int)m_PanelFormat);
+        DEKI_LOG_ERROR("TactilityDisplay: frame is format %d but the panel is %d", static_cast<int>(format),
+                       static_cast<int>(m_PanelFormat));
         return;
     }
 
@@ -472,8 +475,8 @@ void TactilityDisplay::PushRect(const uint8_t* framebuffer, int fbWidth, Deki::C
 
     const size_t bpp = Deki::FrameBufferBytes(format, 1, 1);
     const int32_t rectWidth = x1 - x0;
-    const size_t rowBytes = (size_t)rectWidth * bpp;
-    const size_t fbStride = (size_t)fbWidth * bpp;
+    const size_t rowBytes = static_cast<size_t>(rectWidth) * bpp;
+    const size_t fbStride = static_cast<size_t>(fbWidth) * bpp;
 
     // A full-width rect out of a buffer the panel may read directly needs no
     // staging at all: its rows are already contiguous. A narrower one from such
@@ -503,7 +506,8 @@ void TactilityDisplay::PushRect(const uint8_t* framebuffer, int fbWidth, Deki::C
         }
         else
         {
-            DEKI_LOG_WARNING("TactilityDisplay: panel lock timed out, dropped rows %d-%d", (int)top, (int)bottom);
+            DEKI_LOG_WARNING("TactilityDisplay: panel lock timed out, dropped rows %d-%d", static_cast<int>(top),
+                             static_cast<int>(bottom));
         }
     };
 
@@ -511,7 +515,7 @@ void TactilityDisplay::PushRect(const uint8_t* framebuffer, int fbWidth, Deki::C
     {
         for (int32_t y = y0; y < y1; ++y)
         {
-            draw(y, y + 1, framebuffer + (size_t)y * fbStride + (size_t)x0 * bpp);
+            draw(y, y + 1, framebuffer + static_cast<size_t>(y) * fbStride + static_cast<size_t>(x0) * bpp);
         }
         return;
     }
@@ -524,7 +528,7 @@ void TactilityDisplay::PushRect(const uint8_t* framebuffer, int fbWidth, Deki::C
         const uint8_t* source;
         if (direct)
         {
-            source = framebuffer + (size_t)y * fbStride;
+            source = framebuffer + static_cast<size_t>(y) * fbStride;
         }
         else
         {
@@ -532,11 +536,12 @@ void TactilityDisplay::PushRect(const uint8_t* framebuffer, int fbWidth, Deki::C
             // way if the panel wants the other byte order.
             for (int32_t r = 0; r < bandRows; ++r)
             {
-                const uint8_t* src = framebuffer + (size_t)(y + r) * fbStride + (size_t)x0 * bpp;
-                uint8_t* dst = m_Band + (size_t)r * rowBytes;
+                const uint8_t* src =
+                    framebuffer + static_cast<size_t>(y + r) * fbStride + static_cast<size_t>(x0) * bpp;
+                uint8_t* dst = m_Band + static_cast<size_t>(r) * rowBytes;
                 if (m_NeedsByteSwap)
                 {
-                    CopySwapped16(dst, src, (size_t)rectWidth);
+                    CopySwapped16(dst, src, static_cast<size_t>(rectWidth));
                 }
                 else
                 {

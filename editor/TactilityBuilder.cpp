@@ -1715,8 +1715,9 @@ extern "C"
 {
     DEKI_BUILDER_API const DekiBuilderAbi* DekiBuilderGetAbi(void)
     {
-        static const DekiBuilderAbi kAbi = DekiBuilderThisAbi((uint32_t)sizeof(DekiEditor::PlatformConfig),
-                                                              (uint32_t)sizeof(DekiEditor::CMakeGen::PackageEntry));
+        static const DekiBuilderAbi kAbi =
+            DekiBuilderThisAbi(static_cast<uint32_t>(sizeof(DekiEditor::PlatformConfig)),
+                               static_cast<uint32_t>(sizeof(DekiEditor::CMakeGen::PackageEntry)));
         return &kAbi;
     }
 

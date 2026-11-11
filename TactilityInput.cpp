@@ -223,8 +223,8 @@ void TactilityInput::PollPointer()
 
     if (touched)
     {
-        const int32_t x = (int32_t)xs[0];
-        const int32_t y = (int32_t)ys[0];
+        const int32_t x = static_cast<int32_t>(xs[0]);
+        const int32_t y = static_cast<int32_t>(ys[0]);
 
         if (!m_Touched)
         {
