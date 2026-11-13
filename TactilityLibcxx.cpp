@@ -1,8 +1,9 @@
 // libstdc++ functions a Tactility device app needs and Tactility does not
 // export to apps (see TactilityLibc.c for why they are defined in the app).
 //
-// These are the out-of-line parts of std::unordered_map/set, std::list and
-// std::make_shared that live in libstdc++.so rather than in its headers. Every
+// These are the out-of-line parts of std::unordered_map/set, std::list,
+// std::make_shared and erasing from a std::map/set that live in libstdc++.so
+// rather than in its headers. Every
 // caller is inside the app, so they only have to agree with each other, not
 // with the firmware's copies: the hash need not be libstdc++'s, and the bucket
 // counts need only be primes the policy then keeps to.
@@ -24,6 +25,8 @@
 #include <typeinfo>
 #include <unordered_map>
 #include <utility>
+
+#include "TactilityTreeErase.h"
 
 namespace
 {
@@ -264,6 +267,13 @@ void this_thread::__sleep_for(chrono::seconds s, chrono::nanoseconds ns)
 void terminate() noexcept
 {
     abort();
+}
+
+// Erasing from a std::map or std::set. Tactility exports the tree's insert
+// but not this; see TactilityTreeErase.h.
+_Rb_tree_node_base* _Rb_tree_rebalance_for_erase(_Rb_tree_node_base* const z, _Rb_tree_node_base& header) throw()
+{
+    return DekiTactility::RebalanceForErase(z, header);
 }
 
 }  // namespace std

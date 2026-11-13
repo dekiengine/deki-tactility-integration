@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Erasing from a `std::map` or `std::set` links in a Tactility app. Tactility
+  exports the tree's insert but not its erase, so an app that erased from one
+  was refused at build; the package defines it (`TactilityTreeErase.h`).
+
 ## 0.30.1
 
 ### Fixed
