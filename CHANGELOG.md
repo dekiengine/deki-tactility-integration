@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.40.0
+
+### Changed
+- `minEngine` 0.40.0: built against engine 0.40.0. A build of this package
+  from before does not load and is rebuilt.
 
 ### Fixed
 - Erasing from a `std::map` or `std::set` links in a Tactility app. Tactility
