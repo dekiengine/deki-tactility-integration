@@ -59,15 +59,14 @@ jobs:
 
       # The cache keys, read before the move below takes the files out of the
       # workspace: the editor and engine commits, the editor's dependencies,
-      # the ESP-IDF pin, and the Tactility and TactilityTool commits.
+      # the ESP-IDF pin, and the Tactility commit.
       - name: Cache keys
         id: keys
         run: |
           pin=packages/deki-tactility-integration/editor/TactilityToolchain.h
           commit=$(sed -n 's/.*kCommit = "\([0-9a-f]*\)".*/\1/p' "$pin")
-          tool=$(sed -n 's/.*kToolCommit = "\([0-9a-f]*\)".*/\1/p' "$pin")
           version=$(sed -n 's/.*kVersion = "\([^"]*\)".*/\1/p' "$pin")
-          if [ -z "$commit" ] || [ -z "$tool" ] || [ -z "$version" ]; then
+          if [ -z "$commit" ] || [ -z "$version" ]; then
             echo "::error::No Tactility pin found in $pin"
             exit 1
           fi
@@ -78,7 +77,7 @@ jobs:
             echo "deps=${{ hashFiles('deki-editor/CMakeLists.txt', 'deki-editor/tests/CMakeLists.txt') }}"
             echo "idf=${{ hashFiles('packages/deki-tactility-integration/editor/TactilityToolchainDefinition.h') }}"
             echo "version=$version"
-            echo "tactility=$commit-$(echo "$tool" | cut -c1-12)"
+            echo "tactility=$commit"
             echo "toolchains=$toolchains"
             echo "sdk=$toolchains/tactility/$(echo "$commit" | cut -c1-12)"
           } >> "$GITHUB_OUTPUT"
@@ -147,7 +146,7 @@ jobs:
             ~/.espressif
           key: esp-idf-linux-${{ steps.keys.outputs.idf }}
 
-      # Only the packaged SDK and TactilityTool, not the 1.4 GB build tree they
+      # Only the packaged SDK and its tools, not the 1.4 GB build tree they
       # came from. The SDK directory also holds the list of symbols the
       # firmware exports to apps, read from Tactility's sources on the first
       # app build; the cache is saved after that build, so a warm run never
@@ -156,9 +155,7 @@ jobs:
         id: sdk
         uses: actions/cache/restore@v6
         with:
-          path: |
-            ${{ steps.keys.outputs.sdk }}/sdk
-            ${{ steps.keys.outputs.sdk }}/tool
+          path: ${{ steps.keys.outputs.sdk }}/sdk
           key: tactility-sdk-esp32s3-${{ steps.keys.outputs.tactility }}
 
       - name: Configure
@@ -242,7 +239,7 @@ jobs:
         if: always() && steps.sdk.outputs.cache-hit != 'true'
         id: sdk-complete
         run: |
-          sdk="${{ steps.keys.outputs.sdk }}/sdk/${{ steps.keys.outputs.version }}-esp32s3"
+          sdk="${{ steps.keys.outputs.sdk }}/sdk/${{ steps.keys.outputs.version }}/platform-esp32s3"
           if [ -f "$sdk/TactilitySDK/idf-version.txt" ] && [ -f "$sdk/deki-app-exports-v2.txt" ]; then
             echo "save=true" >> "$GITHUB_OUTPUT"
           else
@@ -253,9 +250,7 @@ jobs:
         uses: actions/cache/save@v6
         if: always() && steps.sdk-complete.outputs.save == 'true'
         with:
-          path: |
-            ${{ steps.keys.outputs.sdk }}/sdk
-            ${{ steps.keys.outputs.sdk }}/tool
+          path: ${{ steps.keys.outputs.sdk }}/sdk
           key: tactility-sdk-esp32s3-${{ steps.keys.outputs.tactility }}
 
       - name: Upload the app

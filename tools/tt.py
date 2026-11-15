@@ -7,10 +7,14 @@ installed apps (tactility/app/<id>/). Eject the drive and reset the device:
 the game is in the Apps menu.
 
 Wi-Fi: on the device, connect to Wi-Fi and switch on Settings > Development.
-tt talks to its development service (port 6666), the same one Tactility's
-own tactility.py uses.
+tt talks to its development server (port 6667, over TLS), the same one
+Tactility's own tt uses, and shares its files in ~/.tactility: the
+certificate that names this computer and the devices it has met. The first
+time, the device asks on its screen whether to accept this computer.
 
-Plain Python 3, nothing to pip install, so it can travel with the game.
+Plain Python 3, nothing to pip install, so it can travel with the game. The
+certificate is made with the cryptography package when it is installed, else
+with the openssl command (Git for Windows, macOS and Linux have it).
 
     python tt.py find                       devices on USB and on this network
     python tt.py install [GAME.app] [--usb [--drive E:]] [--host IP] [--run]
@@ -23,25 +27,45 @@ device on the network. --usb or --host chooses. Without GAME.app, install
 takes the one .app file next to this script.
 """
 import concurrent.futures
+import datetime
+import getpass
 import glob
+import hashlib
 import ipaddress
 import json
 import os
 import shutil
 import socket
+import ssl
 import string
+import struct
+import subprocess
 import sys
 import tarfile
-import urllib.error
-import urllib.parse
-import urllib.request
-import uuid
+import tempfile
 
-PORT = 6666
+PORT = 6667
+PROTOCOL_VERSION = 1
 TIMEOUT = 10
 # The device answers an install only once the whole file is on its SD card,
 # unpacked and registered; a game with its assets takes a while.
 INSTALL_TIMEOUT = 300
+# How long the person at the device has to accept this computer.
+ACCEPT_TIMEOUT = 90
+
+CONFIG_DIRECTORY = os.path.join(os.path.expanduser("~"), ".tactility")
+CLIENT_KEY_PATH = os.path.join(CONFIG_DIRECTORY, "client.key")
+CLIENT_CERTIFICATE_PATH = os.path.join(CONFIG_DIRECTORY, "client.crt")
+KNOWN_HOSTS_PATH = os.path.join(CONFIG_DIRECTORY, "known_hosts")
+
+FRAME_DATA = 0x01
+FRAME_DONE = 0x14
+FRAME_OK = 0x15
+FRAME_FAIL = 0x16
+FRAME_APP_INSTALL = 0x20
+FRAME_APP_UNINSTALL = 0x21
+FRAME_APP_RUN = 0x22
+FRAME_PAYLOAD_MAX = 1024
 
 
 def fail(message):
@@ -49,23 +73,266 @@ def fail(message):
     sys.exit(1)
 
 
-def url(host, path, query=None):
-    if ":" not in host:
-        host = f"{host}:{PORT}"
-    q = "?" + urllib.parse.urlencode(query) if query else ""
-    return f"http://{host}{path}{q}"
+def split_host(host):
+    if host.count(":") == 1:
+        name, port = host.split(":")
+        return name, int(port)
+    return host, PORT
 
 
-def request(method, host, path, query=None, body=None, headers=None, timeout=TIMEOUT):
-    req = urllib.request.Request(url(host, path, query), data=body, method=method, headers=headers or {})
+# ---- this computer's certificate --------------------------------------------
+
+def client_name():
+    return f"{getpass.getuser()}@{socket.gethostname()}"
+
+
+def make_identity_with_cryptography():
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            return r.status, r.read()
-    except urllib.error.HTTPError as e:
-        return e.code, e.read()
-    except (urllib.error.URLError, OSError) as e:
-        fail(f"{host} did not answer ({getattr(e, 'reason', e)}). Is the device on this network, "
-             "with Settings > Development switched on?")
+        from cryptography import x509
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import ec
+        from cryptography.x509.oid import NameOID
+    except ImportError:
+        return False
+    key = ec.generate_private_key(ec.SECP256R1())
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, client_name())])
+    now = datetime.datetime.now(datetime.timezone.utc)
+    certificate = (x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(key.public_key())
+                   .serial_number(x509.random_serial_number())
+                   .not_valid_before(now - datetime.timedelta(days=1))
+                   .not_valid_after(now + datetime.timedelta(days=365 * 50))
+                   .sign(key, hashes.SHA256()))
+    key_bytes = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                  serialization.NoEncryption())
+    descriptor = os.open(CLIENT_KEY_PATH, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, "wb") as f:
+        f.write(key_bytes)
+    with open(CLIENT_CERTIFICATE_PATH, "wb") as f:
+        f.write(certificate.public_bytes(serialization.Encoding.PEM))
+    return True
+
+
+def find_openssl():
+    found = shutil.which("openssl")
+    if found:
+        return found
+    if sys.platform == "win32":
+        for base in (os.environ.get("ProgramFiles", r"C:\Program Files"),
+                     os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")):
+            for candidate in (os.path.join(base, "Git", "usr", "bin", "openssl.exe"),
+                              os.path.join(base, "Git", "mingw64", "bin", "openssl.exe")):
+                if os.path.isfile(candidate):
+                    return candidate
+    return None
+
+
+def make_identity_with_openssl():
+    openssl = find_openssl()
+    if not openssl:
+        return False
+    # The same certificate the cryptography package makes: P-256, self-signed,
+    # named after this computer's user, valid for 50 years.
+    with tempfile.TemporaryDirectory() as work:
+        key = os.path.join(work, "client.key")
+        certificate = os.path.join(work, "client.crt")
+        result = subprocess.run([openssl, "req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1",
+                                 "-nodes", "-keyout", key, "-out", certificate, "-days", str(365 * 50),
+                                 "-subj", "/CN=" + client_name()],
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        if result.returncode != 0 or not os.path.isfile(key) or not os.path.isfile(certificate):
+            print(result.stdout.decode("utf-8", "replace"), file=sys.stderr)
+            return False
+        with open(key, "rb") as f:
+            key_bytes = f.read()
+        descriptor = os.open(CLIENT_KEY_PATH, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(descriptor, "wb") as f:
+            f.write(key_bytes)
+        shutil.copyfile(certificate, CLIENT_CERTIFICATE_PATH)
+    return True
+
+
+def ensure_client_identity():
+    if os.path.isfile(CLIENT_KEY_PATH) and os.path.isfile(CLIENT_CERTIFICATE_PATH):
+        return
+    os.makedirs(CONFIG_DIRECTORY, exist_ok=True)
+    if not make_identity_with_cryptography() and not make_identity_with_openssl():
+        fail("could not make this computer's certificate: install the openssl command, or the cryptography "
+             "package (pip install cryptography). Or install over USB.")
+    print(f"Made this computer's certificate in {CONFIG_DIRECTORY}")
+
+
+def client_fingerprint():
+    with open(CLIENT_CERTIFICATE_PATH, "rb") as f:
+        der = ssl.PEM_cert_to_DER_cert(f.read().decode("ascii"))
+    return hashlib.sha256(der).hexdigest()
+
+
+def grouped(fingerprint):
+    return " ".join(fingerprint[i:i + 4] for i in range(0, len(fingerprint), 4))
+
+
+# ---- devices it has met -----------------------------------------------------
+
+def read_known_hosts():
+    hosts = {}
+    if os.path.isfile(KNOWN_HOSTS_PATH):
+        with open(KNOWN_HOSTS_PATH) as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) == 2:
+                    hosts[parts[0]] = parts[1]
+    return hosts
+
+
+def check_device(host, port, fingerprint):
+    """Remembers a device the first time, as Tactility's tt does, and refuses one
+    whose certificate changed since."""
+    address = f"{host}:{port}"
+    known = read_known_hosts().get(address)
+    if known == fingerprint:
+        return
+    if known is not None:
+        fail(f"the certificate of {address} changed since tt last met it. If the device was reset, remove its "
+             f"line from {KNOWN_HOSTS_PATH}; otherwise someone may be in between.")
+    hosts = read_known_hosts()
+    hosts[address] = fingerprint
+    os.makedirs(CONFIG_DIRECTORY, exist_ok=True)
+    with open(KNOWN_HOSTS_PATH, "w") as f:
+        for known_address, known_fingerprint in hosts.items():
+            f.write(f"{known_address} {known_fingerprint}\n")
+    print(f"New device {address}, fingerprint {grouped(fingerprint)}: it should match the Development app.")
+
+
+# ---- the development server -------------------------------------------------
+
+class Connection:
+    def __init__(self, host, mode, timeout=TIMEOUT, certificate=True):
+        name, port = split_host(host)
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        # A device's certificate is its own: check_device() pins it instead.
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        if certificate:
+            context.load_cert_chain(CLIENT_CERTIFICATE_PATH, CLIENT_KEY_PATH)
+        try:
+            raw = socket.create_connection((name, port), timeout=timeout)
+            self.socket = context.wrap_socket(raw)
+        except (OSError, ssl.SSLError) as e:
+            raise ConnectionError(f"{name}:{port} did not answer ({e}). Is the device on this network, with "
+                                  "Settings > Development switched on?")
+        self.buffer = b""
+        self.fingerprint = hashlib.sha256(self.socket.getpeercert(binary_form=True)).hexdigest()
+        self.host, self.port = name, port
+        hello = {"protocol": PROTOCOL_VERSION, "mode": mode, "client": client_name()}
+        self.send((json.dumps(hello, separators=(",", ":")) + "\n").encode("utf-8"))
+
+    def send(self, data):
+        try:
+            self.socket.sendall(data)
+        except (OSError, ssl.SSLError):
+            fail("the device closed the connection")
+
+    def receive(self, timeout):
+        self.socket.settimeout(timeout)
+        try:
+            data = self.socket.recv(4096)
+        except socket.timeout:
+            return None
+        except (OSError, ssl.SSLError):
+            return False
+        if not data:
+            return False
+        self.buffer += data
+        return True
+
+    def read_line(self, timeout):
+        while b"\n" not in self.buffer:
+            got = self.receive(timeout)
+            if not got:
+                return None
+        line, self.buffer = self.buffer.split(b"\n", 1)
+        return line.decode("utf-8", "replace")
+
+    def send_frame(self, kind, payload=b""):
+        for offset in range(0, max(len(payload), 1), FRAME_PAYLOAD_MAX):
+            chunk = payload[offset:offset + FRAME_PAYLOAD_MAX]
+            self.send(struct.pack(">BH", kind, len(chunk)) + chunk)
+
+    def read_frame(self, timeout):
+        while True:
+            if len(self.buffer) >= 3:
+                kind, length = struct.unpack(">BH", self.buffer[:3])
+                if len(self.buffer) >= 3 + length:
+                    payload = self.buffer[3:3 + length]
+                    self.buffer = self.buffer[3 + length:]
+                    return kind, payload
+            got = self.receive(timeout)
+            if got is None:
+                fail(f"the device did not answer within {timeout} seconds")
+            if got is False:
+                fail("the device closed the connection")
+
+    def close(self):
+        try:
+            self.socket.close()
+        except OSError:
+            pass
+
+
+def device_info(host, timeout=4):
+    """What a device says about itself. Needs no certificate and asks nothing on
+    the device."""
+    connection = Connection(host, "info", timeout=timeout, certificate=False)
+    try:
+        line = connection.read_line(timeout)
+    finally:
+        connection.close()
+    status = json.loads(line or "{}")
+    if status.get("status") != "accepted":
+        raise ConnectionError(f"{host} refused: {status.get('message', line)}")
+    return status.get("info", {})
+
+
+def open_app_session(host):
+    ensure_client_identity()
+    try:
+        connection = Connection(host, "app")
+    except ConnectionError as e:
+        fail(str(e))
+    check_device(connection.host, connection.port, connection.fingerprint)
+    # A computer the device trusts is answered at once; else the device asks.
+    line = connection.read_line(1)
+    if line is None:
+        print(f"Accept this computer on the device (fingerprint {grouped(client_fingerprint())[:9]}...)", flush=True)
+        line = connection.read_line(ACCEPT_TIMEOUT)
+    if line is None:
+        fail("the device did not accept the connection")
+    try:
+        status = json.loads(line)
+    except ValueError:
+        fail(f"unexpected answer from the device: {line}")
+    if status.get("status") == "rejected":
+        fail("the device rejected this computer")
+    if status.get("status") != "accepted":
+        fail(f"the device refused: {status.get('message', line)}")
+    return connection
+
+
+def expect_ok(connection, subject, timeout):
+    kind, payload = connection.read_frame(timeout)
+    if kind == FRAME_FAIL:
+        fail(f"{subject}: {payload.decode('utf-8', 'replace')}. The device's log says more.")
+    if kind != FRAME_OK:
+        fail(f"{subject}: unexpected answer from the device")
+
+
+def app_request(host, kind, app_id):
+    connection = open_app_session(host)
+    try:
+        connection.send_frame(kind, app_id.encode("utf-8"))
+        expect_ok(connection, app_id, TIMEOUT)
+    finally:
+        connection.close()
 
 
 # ---- finding devices --------------------------------------------------------
@@ -105,9 +372,8 @@ def probe(ip):
     except OSError:
         return None
     try:
-        with urllib.request.urlopen(url(ip, "/info"), timeout=4) as r:
-            return ip, json.loads(r.read().decode("utf-8", "replace"))
-    except (OSError, ValueError, urllib.error.URLError):
+        return ip, device_info(ip)
+    except (OSError, ValueError, ConnectionError, ssl.SSLError):
         return None
 
 
@@ -129,8 +395,8 @@ def find_devices(quiet=False):
 def describe(info):
     if not isinstance(info, dict):
         return str(info)
-    keys = ("name", "model", "device", "vendor", "version", "firmware")
-    parts = [str(info[k]) for k in keys if k in info]
+    keys = ("vendor", "name", "id", "version")
+    parts = [str(info[k]) for k in keys if info.get(k)]
     return " ".join(parts) if parts else json.dumps(info)
 
 
@@ -263,13 +529,10 @@ def action_find(args):
 
 def action_info(args):
     host = pick_host(args)
-    status, body = request("GET", host, "/info")
-    if status != 200:
-        fail(f"{host} answered {status}")
     try:
-        print(json.dumps(json.loads(body), indent=2))
-    except ValueError:
-        print(body.decode("utf-8", "replace"))
+        print(json.dumps(device_info(host, TIMEOUT), indent=2))
+    except (ConnectionError, ValueError, ssl.SSLError) as e:
+        fail(str(e))
 
 
 def app_id_of(path):
@@ -302,20 +565,18 @@ def action_install(args):
         install_usb(path, pick_drive(args))
         return
     host = pick_host(args)
-    with open(path, "rb") as f:
-        data = f.read()
-    # Exactly one part, named "app": the device's parser accepts nothing else.
-    boundary = uuid.uuid4().hex
     name = os.path.basename(path)
-    body = (f"--{boundary}\r\n"
-            f"Content-Disposition: form-data; name=\"app\"; filename=\"{name}\"\r\n"
-            f"Content-Type: application/octet-stream\r\n\r\n").encode() + data + f"\r\n--{boundary}--\r\n".encode()
-    print(f"Installing {name} ({len(data) // 1024} KB) on {host}...")
-    status, reply = request("PUT", host, "/app/install", body=body,
-                            headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
-                            timeout=INSTALL_TIMEOUT)
-    if status != 200:
-        fail(f"install refused ({status}): {reply.decode('utf-8', 'replace').strip()}. The device's log says more.")
+    connection = open_app_session(host)
+    try:
+        print(f"Installing {name} ({os.path.getsize(path) // 1024} KB) on {host}...")
+        connection.send_frame(FRAME_APP_INSTALL, name.encode("utf-8"))
+        with open(path, "rb") as f:
+            while data := f.read(64 * 1024):
+                connection.send_frame(FRAME_DATA, data)
+        connection.send_frame(FRAME_DONE)
+        expect_ok(connection, name, INSTALL_TIMEOUT)
+    finally:
+        connection.close()
     print("Installed. It is in the device's Apps menu.")
     if args.get("run"):
         app_id = app_id_of(path)
@@ -325,9 +586,7 @@ def action_install(args):
 
 
 def run(host, app_id):
-    status, reply = request("POST", host, "/app/run", {"id": app_id})
-    if status != 200:
-        fail(f"run refused ({status}): {reply.decode('utf-8', 'replace').strip()}")
+    app_request(host, FRAME_APP_RUN, app_id)
     print(f"Started {app_id}.")
 
 
@@ -344,10 +603,7 @@ def action_uninstall(args):
     if use_usb(args):
         uninstall_usb(app_id, pick_drive(args))
         return
-    host = pick_host(args)
-    status, reply = request("PUT", host, "/app/uninstall", {"id": app_id})
-    if status != 200:
-        fail(f"uninstall refused ({status}): {reply.decode('utf-8', 'replace').strip()}")
+    app_request(pick_host(args), FRAME_APP_UNINSTALL, app_id)
     print(f"Uninstalled {app_id}.")
 
 

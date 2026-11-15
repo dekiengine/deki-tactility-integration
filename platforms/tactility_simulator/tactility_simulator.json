@@ -19,7 +19,7 @@
   ],
   "bootScene": "platforms/tactility_simulator/boot.scene",
   "frameworkOptions": {
-    "tactilityPlatform": "posix-x86_64",
+    "tactilityPlatform": "linux-x86_64",
     "appId": "com.example.dekigame",
     "targetSdk": "0.8.0-dev",
     "appVersion": "0.1.0",

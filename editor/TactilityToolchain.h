@@ -7,29 +7,27 @@
 //                  pinned component, at the same install path, as
 //                  deki-esp32-integration declares, so a machine that builds
 //                  for both has one copy. The two pins must move together.
-//   tactility-sdk  The TactilitySDK for the platform. Tactility 0.8 has no
-//                  published SDK, so it is built: Tactility's sources at a
-//                  pinned commit are checked out and compiled (for a generic
-//                  board of the chip, or as the simulator for a posix
-//                  platform), then packaged with Tactility's own release
-//                  script, as its CI does. Once 0.8.0 is released the device
-//                  SDKs can be a pinned download.
+//   tactility-sdk  The TactilitySDK for the platform, with the app build tool
+//                  that comes with it. Tactility 0.8 has no released SDK, so
+//                  it is built: Tactility's sources at a pinned commit are
+//                  checked out and compiled (for a generic board of the chip,
+//                  or as the simulator for a host platform), then packaged
+//                  with Tactility's own release scripts, as its CI does. The
+//                  result has the layout Tactility's tt uses:
+//                      <root>/sdk/<version>/platform-<platform>/TactilitySDK
+//                      <root>/sdk/<version>/tools/app.py
+//                  so an app builds with TACTILITY_SDK_PATH=<root>. Once 0.8.0
+//                  is released the device SDKs can be a pinned download.
 //
-// A posix platform is the Tactility simulator, which runs on Linux only. It
-// needs no ESP-IDF; its SDK is the simulator's own build, and an app for it is
-// a shared object the simulator loads.
+// A host platform ("linux-x86_64") is the Tactility simulator, which runs on
+// Linux only. It needs no ESP-IDF; its SDK is the simulator's own build, and an
+// app for it is a shared object the simulator loads. The simulator has a few
+// device profiles; the deploy step picks the one of the platform's screen size.
 //
-// The simulator is built with one patch to the pinned sources: its display
-// size, fixed at 640x480 upstream, comes from TACTILITY_SIMULATOR_RESOLUTION
-// ("320x240"), so it can stand in for the device a platform describes. The
-// deploy step starts it at the platform's screen size. The patch matches
-// exactly and refuses to apply to sources it does not recognise.
-//
-// The app build tool comes from a second pinned checkout, TactilityTool: its
-// tactility.py, and its CDN/sdkconfig.app.<chip> files, the app configuration
-// tactility.py otherwise downloads from Tactility's CDN on first use. Copying
-// them into an app's .tactility/ first means an app build never needs that
-// CDN, which is not always reachable.
+// The device SDK gets one Deki line in the app configuration it ships
+// (sdkconfig.app.<chip>, which app.py copies into every app): the firmware's
+// optimisation level, which the default (-Og) would cost a game several times
+// over.
 
 #include <atomic>
 #include <functional>
@@ -41,36 +39,30 @@ namespace DekiEditor
 
 struct TactilityPin
 {
-    // Head of Tactility main on 2026-09-13; firmware, simulator and test CI all
-    // green, and built with ESP-IDF v6.1.
+    // Head of Tactility main on 2026-11-15, still 0.8.0-dev and built with
+    // ESP-IDF v6.1.
     static constexpr const char* kRepository = "https://github.com/TactilityProject/Tactility.git";
-    static constexpr const char* kCommit = "65ee2238764d4e860fc8a3484c26b533b3975c90";
+    static constexpr const char* kCommit = "6e4b989f76cf39dd7a6b3bbc6416d69ffc059c72";
     static constexpr const char* kVersion = "0.8.0-dev";
     // What release-sdk-esp32.py records in the SDK and CI sets explicitly.
     static constexpr const char* kIdfMajorMinor = "6.1";
-
-    // TactilityTool "Update sdkconfig for esp-idf v6.1" (2026-09-13): tool
-    // v6.0.0, the version this Tactility commit's own copy reports.
-    static constexpr const char* kToolRepository = "https://github.com/TactilityProject/TactilityTool.git";
-    static constexpr const char* kToolCommit = "ad2d8a79e21ee14d0bafa967ac1cee45517d6d15";
 };
 
 class TactilitySdk
 {
 public:
-    /// <toolchains>/tactility/<commit, 12 chars>
+    /// <toolchains>/tactility/<commit, 12 chars>. What an app build sets
+    /// TACTILITY_SDK_PATH to: the SDKs are in its sdk/<version>/.
     static std::string Root();
     static std::string SourceDir();
-    /// The TactilityTool checkout: tactility.py and CDN/sdkconfig.app.<chip>.
+    /// The app build tool of the SDK: app.py and the tools it runs.
     static std::string ToolDir();
-    /// Where the packaged SDKs live, in the layout tactility.py's --local-sdk
-    /// expects: <base>/<version>-<platform>/TactilitySDK. It is what an app
-    /// build sets TACTILITY_SDK_PATH to.
-    static std::string SdkBase();
-    /// The packaged SDK for one platform: a chip ("esp32s3") or "posix-<arch>".
+    /// The packaged SDK for one platform: a chip ("esp32s3") or the simulator
+    /// ("linux-x86_64").
     static std::string SdkDir(const std::string& platform);
 
-    /// Whether `platform` is the simulator rather than a chip.
+    /// Whether `platform` is the simulator, which Tactility names after the
+    /// computer it runs on (<os>-<architecture>), rather than a chip.
     static bool IsPosix(const std::string& platform);
 
     /// Every symbol a device app may leave for the firmware to resolve: what
@@ -94,9 +86,8 @@ public:
     /// other systems.
     static std::string PathRepairScript();
 
-    /// Whether the SDK for this platform is built and the tool checked out.
-    /// Each release script writes a known file last, so that file means
-    /// packaging finished.
+    /// Whether the SDK for this platform and its tools are built. Each release
+    /// script writes a known file last, so that file means packaging finished.
     static bool IsBuilt(const std::string& platform);
 
     /// Checks out the pinned sources if needed, builds them for `platform` and
@@ -107,9 +98,9 @@ public:
                              const std::function<void(const std::string&)>& onLine, const std::atomic<bool>* cancel);
 
     /// Makes sure a simulator is answering on this machine: uses one that
-    /// already is, or starts the built one at `width`x`height` with its
-    /// development service on and waits for it. Returns an empty string on
-    /// success.
+    /// already is, or starts the built one with the device profile of
+    /// `width`x`height` and its development service on, and waits for it.
+    /// Returns an empty string on success.
     static std::string EnsureSimulator(int width, int height, const std::function<void(const std::string&)>& onLine,
                                        const std::atomic<bool>* cancel);
 };

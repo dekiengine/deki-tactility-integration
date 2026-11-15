@@ -8,7 +8,7 @@
 // What Tactility wants, and why this does not look like the ESP-IDF builder:
 //   - the artifact is an app loaded at runtime, not a firmware image: a
 //     relocatable ELF on a device, a shared object in the simulator
-//   - the app is built by Tactility's own tool, tactility.py, against a
+//   - the app is built by Tactility's own tool, the SDK's app.py, against a
 //     TactilitySDK, through a root CMakeLists that calls tactility_project_*
 //   - there is no flashing: an app is installed over the network (the
 //     simulator's development service, a device's over Wi-Fi), from an SD
@@ -16,7 +16,7 @@
 //
 // A platform names what it runs on with one framework option:
 //   idfTarget          a chip, "esp32s3" or "esp32p4" - a device app
-//   tactilityPlatform  "posix-x86_64" - the Tactility simulator, on Linux
+//   tactilityPlatform  "linux-x86_64" - the Tactility simulator, on Linux
 //
 // The simulator compiles the game into the shared object the simulator loads
 // (GenerateSimulatorComponent); a device compiles it as the ESP-IDF component
@@ -81,7 +81,7 @@ const std::vector<std::string>& ExecutableFromPsramTargets()
 std::string HostSimulatorPlatform()
 {
 #if defined(__linux__) && defined(__x86_64__)
-    return "posix-x86_64";
+    return "linux-x86_64";
 #else
     return "";
 #endif
@@ -220,14 +220,15 @@ public:
         else if (chip.empty() && sim.empty())
         {
             problems.push_back("name what the app runs on: idfTarget for a device chip, or tactilityPlatform "
-                               "for the simulator (posix-x86_64)");
+                               "for the simulator (linux-x86_64)");
         }
         else if (!sim.empty())
         {
             const std::string host = HostSimulatorPlatform();
             if (!TactilitySdk::IsPosix(sim))
             {
-                problems.push_back("tactilityPlatform '" + sim + "' is not a simulator platform (posix-<arch>)");
+                problems.push_back("tactilityPlatform '" + sim +
+                                   "' is not a simulator platform (<os>-<architecture>, such as linux-x86_64)");
             }
             else if (host.empty())
             {
@@ -284,10 +285,10 @@ public:
     // ---- deploy: over the development service --------------------------------
     //
     // Installs the app without starting it: it appears in the OS's Apps menu
-    // like any other and is opened from there. The simulator installs through
-    // tactility.py; a device through tools/tt.py, which needs no pip packages
-    // and finds the device on the network itself, since Tactility does not
-    // advertise it. A device must be on Wi-Fi with Settings > Development on.
+    // like any other and is opened from there. Both the simulator and a
+    // device install through tools/tt.py, which finds a device on the network
+    // itself, since Tactility does not advertise it. A device must be on Wi-Fi
+    // with Settings > Development on.
     //
     // A device has no target to list unless the platform names one
     // (frameworkOptions.deviceHost); with none, tt.py installs on the first
@@ -375,7 +376,7 @@ public:
         return (ProjectPaths::Build(projectPath) / id).string();
     }
 
-    // The app's assets directory, which tactility.py packs into the .app: the
+    // The app's assets directory, which app.py packs into the .app: the
     // boot payload (project_data.bin, boot.scene) lands at its root, which the
     // app reads as F:/.
     std::string GetBootPayloadDirectory(const std::string& projectPath) const override
@@ -439,7 +440,7 @@ public:
             }
         }
 
-        // tactility.py reads this to build and package the app. One app, built
+        // app.py reads this to build and package the app. One app, built
         // at the project root (a v3 manifest with a single app.0 block).
         {
             std::ofstream f(root / "manifest.properties");
@@ -454,7 +455,7 @@ public:
               << "app.0.binary=" << appId << "\n";
         }
 
-        // tactility.py's own template: it rewrites any root CMakeLists whose
+        // app.py's own template: it rewrites any root CMakeLists whose
         // first line is not its current version marker, and keeps one that
         // has it. A device app adds its link script, which elf_loader's
         // project_elf() puts on the link line from ELF_LIBS.
@@ -575,10 +576,10 @@ public:
         }
         sdk.tooltip = TactilitySdk::IsPosix(platform)
                           ? TrMark("The Tactility simulator, built from Tactility's sources at the pinned commit and "
-                                   "packaged as an SDK, plus TactilityTool's app build tool. Takes a while.")
+                                   "packaged as an SDK with its app build tool. Takes a while.")
                           : TrMark("Built from Tactility's sources at the pinned commit (0.8 has no published SDK "
-                                   "yet), plus TactilityTool's app build tool and configuration. Needs the ESP-IDF "
-                                   "SDK first; takes a while.");
+                                   "yet) and packaged with its app build tool. Needs the ESP-IDF SDK first; takes a "
+                                   "while.");
         components.push_back(sdk);
         return components;
     }
@@ -688,7 +689,7 @@ private:
     }
 
     // The simulator app: everything the game is made of - engine, packages,
-    // game sources, reflection - compiled into the shared object tactility.py
+    // game sources, reflection - compiled into the shared object app.py
     // builds. tactility_project_post() adds this directory; the SDK's
     // tactility_component_register() makes the .so and links the SDK's
     // headers-only target, since the simulator resolves Tactility's own
@@ -765,7 +766,7 @@ private:
           // engine included.
           << "add_compile_options(-fno-gnu-unique)\n\n";
 
-        // Absolute, and rewritten on every build: tactility.py runs the
+        // Absolute, and rewritten on every build: app.py runs the
         // configure itself, so nothing can be passed on its command line.
         f << "set(DEKI_PROJECT_ROOT \"" << ToCMakePath(projectPath) << "\")\n"
           << "set(DEKI_ENGINE_PATH \"" << enginePath << "\")\n\n";
@@ -1041,7 +1042,7 @@ private:
           << "    SRCS \"" << enginePath << "/entry/Main.cpp\"\n"
           << "    INCLUDE_DIRS \".\")\n\n";
 
-        // Absolute, and rewritten on every build: tactility.py runs the
+        // Absolute, and rewritten on every build: app.py runs the
         // configure itself, so nothing can be passed on its command line.
         f << "set(DEKI_PROJECT_PATH \"" << ToCMakePath(projectPath) << "\")\n"
           << "set(DEKI_ENGINE_PATH \"" << enginePath << "\")\n\n";
@@ -1353,8 +1354,9 @@ private:
               << "if [ -z \"$1\" ]; then exec python3 tt.py install --run; fi\n"
               << "exec python3 tt.py install --run --host \"$1\"\n";
         }
-        fs::permissions(exportDir / "install.sh", fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec,
-                        fs::perm_options::add, ec);
+        fs::permissions(exportDir / "install.sh",
+                        fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec, fs::perm_options::add,
+                        ec);
         {
             std::ofstream f(exportDir / "README.txt", std::ios::binary);
             f << name << " for Tactility\n"
@@ -1370,7 +1372,8 @@ private:
               << "Over Wi-Fi:\n"
               << "  1. On the device, connect to Wi-Fi and switch on Settings > Development.\n"
               << "  2. Run the installer on a computer on the same network. It finds the device,\n"
-              << "     installs the game and starts it.\n"
+              << "     installs the game and starts it. The first time, accept the computer on\n"
+              << "     the device's screen.\n"
               << "\n"
               << "tt.py does more: python tt.py find | info | install | run " << appId << " | uninstall " << appId
               << "\n"
@@ -1381,8 +1384,9 @@ private:
         return {};
     }
 
-    // tactility.py, the pinned copy, run in the app directory with the SDK
-    // it was built against. The simulator's compiler is the one its SDK was
+    // The SDK's app.py, run in the app directory with the SDK it came with:
+    // TACTILITY_SDK_PATH names the folder holding sdk/<version>/, and
+    // TACTILITY_SDK_VERSION the version, as Tactility's tt sets them. The simulator's compiler is the one its SDK was
     // built with (TactilitySdk::Build finds it the same way); a device app
     // builds in ESP-IDF's environment, at the version the SDK records.
     std::string ToolCommand(const fs::path& root, const std::string& args) const
@@ -1410,13 +1414,14 @@ private:
             f << TactilitySdk::IdfEnvironmentScript(IdfPath())
               << "set \"ESP_IDF_VERSION=" << TactilityPin::kIdfMajorMinor << "\"\r\n";
         }
-        // UTF-8 out: tactility.py prints emoji status marks, which a pipe's
+        // UTF-8 out: app.py prints emoji status marks, which a pipe's
         // default code page cannot encode, and Deploy() reads its "❌".
         f << "set \"PYTHONUTF8=1\"\r\n"
           << "set \"PYTHONIOENCODING=utf-8\"\r\n"
-          << "set \"TACTILITY_SDK_PATH=" << TactilitySdk::SdkBase() << "\"\r\n"
+          << "set \"TACTILITY_SDK_PATH=" << TactilitySdk::Root() << "\"\r\n"
+          << "set \"TACTILITY_SDK_VERSION=" << TactilityPin::kVersion << "\"\r\n"
           << "cd /d \"" << root.string() << "\" || exit /b 1\r\n"
-          << "python \"" << TactilitySdk::ToolDir() << "/tactility.py\" " << args << "\r\n";
+          << "python \"" << TactilitySdk::ToolDir() << "/app.py\" " << args << "\r\n";
         return "call \"" + script.string() + "\"";
 #else
         const fs::path script = root / "tactility-tool.sh";
@@ -1433,50 +1438,12 @@ private:
               << "export CXX=$(command -v g++-16 || command -v g++)\n"
               << "export CC=$(command -v gcc-16 || command -v gcc)\n";
         }
-        f << "export TACTILITY_SDK_PATH=\"" << TactilitySdk::SdkBase() << "\"\n"
+        f << "export TACTILITY_SDK_PATH=\"" << TactilitySdk::Root() << "\"\n"
+          << "export TACTILITY_SDK_VERSION=" << TactilityPin::kVersion << "\n"
           << "cd \"" << root.string() << "\"\n"
-          << "exec python3 \"" << TactilitySdk::ToolDir() << "/tactility.py\" " << args << "\n";
+          << "exec python3 \"" << TactilitySdk::ToolDir() << "/app.py\" " << args << "\n";
         return "sh \"" + script.string() + "\"";
 #endif
-    }
-
-    // What tactility.py would otherwise download from Tactility's CDN on a
-    // first build, from the pinned TactilityTool checkout: the app sdkconfig
-    // for the chip and the tool's own version record. tactility.py copies the
-    // sdkconfig over the app's on every build, so Deki's settings go into its
-    // copy here: the firmware's optimisation level, which the default (-Og)
-    // would cost a game several times over.
-    std::string StageToolFiles(const fs::path& root, const std::string& chip) const
-    {
-        const fs::path cdn = fs::path(TactilitySdk::ToolDir()) / "CDN";
-        const fs::path staged = root / ".tactility";
-        std::error_code ec;
-        fs::create_directories(staged, ec);
-
-        const std::string sdkconfigName = "sdkconfig.app." + chip;
-        std::ifstream in(cdn / sdkconfigName, std::ios::binary);
-        if (!in)
-        {
-            return "TactilityTool has no " + (cdn / sdkconfigName).string();
-        }
-        std::string sdkconfig((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-        if (!sdkconfig.empty() && sdkconfig.back() != '\n')
-        {
-            sdkconfig += '\n';
-        }
-        sdkconfig += "# Added by the Deki Tactility builder\n"
-                     "CONFIG_COMPILER_OPTIMIZATION_PERF=y\n";
-        if (!CMakeGen::WriteIfChanged(staged / sdkconfigName, sdkconfig))
-        {
-            return "could not write " + (staged / sdkconfigName).string();
-        }
-
-        fs::copy_file(cdn / "tool.json", staged / "tool.json", fs::copy_options::overwrite_existing, ec);
-        if (ec)
-        {
-            return "could not copy TactilityTool's tool.json: " + ec.message();
-        }
-        return {};
     }
 
     void DoBuild(const std::string& projectPath, BuildOutputCallback out, BuildProgressCallback progress)
@@ -1508,16 +1475,8 @@ private:
                         "No boot payload and assets in " + assets.string() + "; build through the editor");
         }
 
-        if (!TactilitySdk::IsPosix(platform))
-        {
-            if (const std::string error = StageToolFiles(root, platform); !error.empty())
-            {
-                return Fail(out, progress, error);
-            }
-        }
-
         const int code = RunShellCommand(
-            ToolCommand(root, "build -a " + platform + " --local-sdk"), root.string(),
+            ToolCommand(root, "build -a " + platform), root.string(),
             [&out](const std::string& line)
             {
                 if (out)
@@ -1532,13 +1491,13 @@ private:
         }
         if (code != 0)
         {
-            return Fail(out, progress, "tactility.py build failed (exit code " + std::to_string(code) + ")");
+            return Fail(out, progress, "app.py build failed (exit code " + std::to_string(code) + ")");
         }
 
         const fs::path app = root / "build" / (m_PlatformConfig.Option("appId") + ".app");
         if (!fs::is_regular_file(app, ec))
         {
-            return Fail(out, progress, "tactility.py finished but " + app.string() + " is missing");
+            return Fail(out, progress, "app.py finished but " + app.string() + " is missing");
         }
 
         // A device refuses to load an app that names a symbol its firmware
@@ -1562,7 +1521,8 @@ private:
             {
                 return Fail(out, progress, error);
             }
-            Report(out, "Exported to " + (root / "export").string() + " with tt.py, for installing over USB or Wi-Fi", false);
+            Report(out, "Exported to " + (root / "export").string() + " with tt.py, for installing over USB or Wi-Fi",
+                   false);
         }
 
         Report(out, "Built " + app.string(), false);
@@ -1576,7 +1536,8 @@ private:
     void DoDeploy(const std::string& projectPath, const std::string& host, BuildOutputCallback out,
                   BuildProgressCallback progress)
     {
-        SetProgress(BuildState::Deploying, "Installing on " + (host.empty() ? std::string("a device on the network") : host), 0.0f);
+        SetProgress(BuildState::Deploying,
+                    "Installing on " + (host.empty() ? std::string("a device on the network") : host), 0.0f);
         if (progress)
         {
             progress(GetProgress());
@@ -1609,50 +1570,16 @@ private:
             }
         }
 
-        if (!IsSimulator())
-        {
-            return DeployToDevice(projectPath, root, host, out, progress);
-        }
-
-        // The simulator must be running, with its development service on.
-        //
-        // tactility.py's exit code does not say whether this worked: a refused
-        // install prints its failure mark and still exits 0. The mark
-        // (print_status_error's "❌") is the only failure signal.
-        bool toolFailed = false;
-        const int code = RunShellCommand(
-            ToolCommand(root, "install --host " + host + " --local-sdk"), root.string(),
-            [&out, &toolFailed](const std::string& line)
-            {
-                if (line.find("\xE2\x9D\x8C") != std::string::npos)
-                {
-                    toolFailed = true;
-                }
-                if (out)
-                {
-                    out(line, false);
-                }
-            },
-            &m_CancelRequested);
-        if (code != 0 || toolFailed)
-        {
-            return Fail(out, progress,
-                        "tactility.py install on " + host +
-                            " failed; its output above, and the device's log, say why. A device that cannot be "
-                            "reached is not running, or its development service is off.");
-        }
-
-        const std::string name = AppNameFor(projectPath, m_PlatformConfig);
-        Report(out, "Installed '" + name + "' on " + host + "; open it from the Apps menu", false);
-        SetProgress(BuildState::Completed, "Installed on " + host, 1.0f);
-        if (progress)
-        {
-            progress(GetProgress());
-        }
+        // The simulator installs the way a device on Wi-Fi does: its
+        // development server is the same. The first time, it asks on its
+        // screen whether to accept this computer.
+        return DeployToDevice(projectPath, root, host, out, progress);
     }
 
-    // A device over Wi-Fi, through tt.py. An empty host lets tt.py find the
-    // first device on the network. tt.py exits non-zero when anything fails.
+    // A device over Wi-Fi (or the simulator), through tt.py, which needs no
+    // pip packages and asks nothing in the terminal. An empty host lets tt.py
+    // find the first device on the network. tt.py exits non-zero when
+    // anything fails.
     void DeployToDevice(const std::string& projectPath, const fs::path& root, const std::string& host,
                         BuildOutputCallback out, BuildProgressCallback progress)
     {
@@ -1693,7 +1620,8 @@ private:
 
         const std::string name = AppNameFor(projectPath, m_PlatformConfig);
         Report(out,
-               usb ? "Installed '" + name + "' on the SD card; eject it and reset the device, then open it from the Apps menu"
+               usb ? "Installed '" + name +
+                         "' on the SD card; eject it and reset the device, then open it from the Apps menu"
                    : "Installed '" + name + "'; open it from the device's Apps menu",
                false);
         SetProgress(BuildState::Completed, "Installed", 1.0f);

@@ -63,9 +63,14 @@ those boards, and small apps run on them fine.
 
 ## Installing over Wi-Fi: tt.py
 
-`tools/tt.py` installs a game on a device over Wi-Fi. It is plain Python 3 with
-nothing to `pip install`, and it talks to the device's development service on
-port 6666, the same service Tactility's own `tactility.py` uses.
+`tools/tt.py` installs a game on a device over Wi-Fi or USB. It is plain Python
+3 with nothing to `pip install`. Over Wi-Fi it talks to the device's development
+server on port 6667 (TLS), the same server Tactility's own `tt` uses, and shares
+its files in `~/.tactility`: the certificate that names this computer and the
+devices it has met. The certificate is made on first use, with the
+`cryptography` package when it is installed, else with the `openssl` command
+(Git for Windows, macOS and Linux have it). The first time, the device asks on
+its screen whether to accept the computer.
 
 ```
 python tt.py find                        Tactility devices on this network
@@ -75,8 +80,9 @@ python tt.py run com.example.mygame --host 192.168.1.50
 python tt.py uninstall com.example.mygame
 ```
 
-Tactility does not advertise itself on the network, so `find` probes port 6666
-across the /24 of each of the computer's addresses (a few seconds). On the
+Tactility does not advertise itself on the network, so `find` probes port 6667
+across the /24 of each of the computer's addresses (a few seconds), and asks
+each device that answers for its name, which needs no certificate. On the
 device, connect to Wi-Fi and switch on **Settings > Development** first.
 
 A device build writes `build/<platform>/export/`: the `.app`, `tt.py`,

@@ -10,6 +10,22 @@
 - **The game follows Tactility's volume.** `initialVolume` is 100 (was 80):
   the game adds no level of its own, so it plays as loud as the system
   volume is set.
+- **Tactility pinned to 6e4b989f76cf** (main on 2026-11-15, still
+  0.8.0-dev). Firmware for a device must be from this commit or later: the
+  development server and app install changed.
+  - The SDK is laid out the way Tactility's `tt` lays it out
+    (`sdk/<version>/platform-<platform>/TactilitySDK`) and apps build with the
+    SDK's own `app.py`. TactilityTool is archived and no longer checked out;
+    the app configuration comes from the SDK. Installed SDKs from the old pin
+    are not used; install the TactilitySDK component again.
+  - The simulator platform is `linux-x86_64` (was `posix-x86_64`), Tactility's
+    new name for it. It is no longer patched: its screen comes from one of its
+    device profiles, picked by the platform's size (320x240 is the T-Deck).
+- **tt.py speaks the new development server**: TLS on port 6667 instead of
+  HTTP on 6666. It makes this computer's certificate on first use (the
+  `cryptography` package if installed, else the `openssl` command) and shares
+  `~/.tactility` with Tactility's `tt`. The first install asks on the device's
+  screen. The simulator installs through tt.py too.
 
 ## 0.40.0
 
