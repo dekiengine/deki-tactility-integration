@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- **Sound goes through deki-audio's mixer.** The speaker is a mixer output:
+  a thread of the game's own mixes and writes to Tactility's audio stream,
+  as the SDK asks (never the main or LVGL thread), so many audios play at
+  once, with streaming and per-target conversion. It plays at 22050 Hz.
+- Starts quieter: `initialVolume` is 25 (was 80); the system volume still
+  applies on top.
+
 ## 0.40.0
 
 ### Changed

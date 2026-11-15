@@ -24,13 +24,13 @@ public:
                  "rate the game's sounds were made at.")
     DEKI_UNIT(Frequency)
     DEKI_RANGE(8000, 48000)
-    int32_t sampleRate = 16000;
+    int32_t sampleRate = 22050;
 
     /// Software playback volume, 0..100 percent, on top of the system volume.
     DEKI_EXPORT
     DEKI_TOOLTIP("The game's own volume at startup, 0 to 100. The device's system volume still applies on top.")
     DEKI_RANGE(0, 100)
-    int32_t initialVolume = 80;
+    int32_t initialVolume = 25;
 
     void Setup(SetupCallback onComplete) override;
     const char* GetSetupName() const override { return "Tactility Audio"; }
