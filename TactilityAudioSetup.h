@@ -30,7 +30,7 @@ public:
     DEKI_EXPORT
     DEKI_TOOLTIP("The game's own volume at startup, 0 to 100. The device's system volume still applies on top.")
     DEKI_RANGE(0, 100)
-    int32_t initialVolume = 25;
+    int32_t initialVolume = 100;
 
     void Setup(SetupCallback onComplete) override;
     const char* GetSetupName() const override { return "Tactility Audio"; }

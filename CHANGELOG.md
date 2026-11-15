@@ -7,8 +7,9 @@
   a thread of the game's own mixes and writes to Tactility's audio stream,
   as the SDK asks (never the main or LVGL thread), so many audios play at
   once, with streaming and per-target conversion. It plays at 22050 Hz.
-- Starts quieter: `initialVolume` is 25 (was 80); the system volume still
-  applies on top.
+- **The game follows Tactility's volume.** `initialVolume` is 100 (was 80):
+  the game adds no level of its own, so it plays as loud as the system
+  volume is set.
 
 ## 0.40.0
 
