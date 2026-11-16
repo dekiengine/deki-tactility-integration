@@ -17,8 +17,10 @@ namespace DekiTactility
 /// `keyboard_read_key()` gives the full keyboard without LVGL. That is what
 /// makes keyboard devices like the T-Deck and the Cardputer usable.
 ///
-/// Both devices are optional: a board with touch and no keyboard, or a
-/// keyboard and no touch, works with whichever it has.
+/// Both are optional: a board with touch and no keyboard, or a keyboard and no
+/// touch, works with whichever it has. Every keyboard is read, since a board
+/// can have several: the T-Deck's trackball is a keyboard of arrow keys beside
+/// the real one.
 ///
 /// When the game runs in a window (TactilityWindowDisplay), LVGL runs and owns
 /// both devices, so input comes from the window's canvas, already in game
@@ -41,6 +43,7 @@ public:
 private:
     void PollPointer();
     void PollKeyboard();
+    void PollKeyboard(struct Device* keyboard);
     void Emit(const DekiInput::InputEvent& event);
     /// Updates the pointer position and held keys from an event that arrived
     /// ready-made (from a window's canvas).
@@ -56,8 +59,14 @@ private:
     /// reads, and a stuck controller would never stop asking.
     static constexpr int kMaxKeyReadsPerUpdate = 16;
 
+    /// A touch screen. Tactility's drivers register as touch devices; the
+    /// older pointer type is still read for any driver that has not moved.
     struct Device* m_Pointer = nullptr;
-    struct Device* m_Keyboard = nullptr;
+    bool m_PointerIsTouch = false;
+
+    static constexpr int kMaxKeyboards = 4;
+    struct Device* m_Keyboards[kMaxKeyboards] = {};
+    int m_KeyboardCount = 0;
     bool m_Initialized = false;
 
     std::vector<DekiInput::InputEventCallback> m_Callbacks;

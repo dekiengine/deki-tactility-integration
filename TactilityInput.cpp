@@ -11,6 +11,7 @@ extern "C"
 #include <tactility/device.h>
 #include <tactility/drivers/keyboard.h>
 #include <tactility/drivers/pointer.h>
+#include <tactility/drivers/touch.h>
 }
 #endif
 
@@ -93,6 +94,28 @@ bool TactilityInput::IsKeyPressed(uint32_t key) const
 
 #if defined(DEKI_TACTILITY_TARGET)
 
+namespace
+{
+
+struct KeyboardList
+{
+    struct Device** devices;
+    int count;
+    int limit;
+};
+
+bool CollectKeyboard(struct Device* device, void* context)
+{
+    auto* list = static_cast<KeyboardList*>(context);
+    if (list->count < list->limit && device_is_ready(device))
+    {
+        list->devices[list->count++] = device;
+    }
+    return true;
+}
+
+}  // namespace
+
 bool TactilityInput::Initialize()
 {
     if (m_Initialized)
@@ -100,26 +123,44 @@ bool TactilityInput::Initialize()
         return true;
     }
 
-    // Both devices are optional. A board may have touch and no keyboard (most
+    // Everything is optional. A board may have touch and no keyboard (most
     // panels) or a keyboard and no touch (Cardputer); only having neither is a
     // failure.
-    if (device_get_first_active_by_type(&POINTER_TYPE, &m_Pointer) != ERROR_NONE)
+    if (device_get_first_active_by_type(&TOUCH_TYPE, &m_Pointer) == ERROR_NONE)
+    {
+        m_PointerIsTouch = true;
+    }
+    else if (device_get_first_active_by_type(&POINTER_TYPE, &m_Pointer) == ERROR_NONE)
+    {
+        m_PointerIsTouch = false;
+    }
+    else
     {
         m_Pointer = nullptr;
     }
-    if (device_get_first_active_by_type(&KEYBOARD_TYPE, &m_Keyboard) != ERROR_NONE)
+
+    // The list is gathered first and referenced after: the walk holds the
+    // device list, so taking references inside it is left out.
+    struct Device* found[kMaxKeyboards] = {};
+    KeyboardList list = { found, 0, kMaxKeyboards };
+    device_for_each_of_type(&KEYBOARD_TYPE, &list, CollectKeyboard);
+    m_KeyboardCount = 0;
+    for (int i = 0; i < list.count; ++i)
     {
-        m_Keyboard = nullptr;
+        if (device_get(found[i]) == ERROR_NONE)
+        {
+            m_Keyboards[m_KeyboardCount++] = found[i];
+        }
     }
 
-    if (m_Pointer == nullptr && m_Keyboard == nullptr)
+    if (m_Pointer == nullptr && m_KeyboardCount == 0)
     {
-        DEKI_LOG_ERROR("TactilityInput: no pointer and no keyboard device");
+        DEKI_LOG_ERROR("TactilityInput: no touch screen and no keyboard");
         return false;
     }
 
     m_Initialized = true;
-    DEKI_LOG_INFO("TactilityInput: pointer=%s keyboard=%s", m_Pointer ? "yes" : "no", m_Keyboard ? "yes" : "no");
+    DEKI_LOG_INFO("TactilityInput: touch=%s keyboards=%d", m_Pointer ? "yes" : "no", m_KeyboardCount);
     return true;
 }
 
@@ -130,11 +171,12 @@ void TactilityInput::Shutdown()
         device_put(m_Pointer);
         m_Pointer = nullptr;
     }
-    if (m_Keyboard != nullptr)
+    for (int i = 0; i < m_KeyboardCount; ++i)
     {
-        device_put(m_Keyboard);
-        m_Keyboard = nullptr;
+        device_put(m_Keyboards[i]);
+        m_Keyboards[i] = nullptr;
     }
+    m_KeyboardCount = 0;
     m_Callbacks.clear();
     m_HeldKeyCount = 0;
     m_Touched = false;
@@ -207,13 +249,20 @@ void TactilityInput::PollPointer()
     // read_data() refreshes the controller's cached state; get_touched_points()
     // then reports it. Tactility gives the current points, not events, so the
     // down/move/up transitions are made here.
-    pointer_read_data(m_Pointer, 0);
-
     uint16_t xs[1] = {};
     uint16_t ys[1] = {};
     uint16_t strengths[1] = {};
     uint8_t count = 0;
-    pointer_get_touched_points(m_Pointer, xs, ys, strengths, &count, 1);
+    if (m_PointerIsTouch)
+    {
+        touch_read_data(m_Pointer, 0);
+        touch_get_touched_points(m_Pointer, xs, ys, strengths, &count, 1);
+    }
+    else
+    {
+        pointer_read_data(m_Pointer, 0);
+        pointer_get_touched_points(m_Pointer, xs, ys, strengths, &count, 1);
+    }
 
     const bool touched = (count > 0);
     const uint32_t now = Deki::Time::GetTime();
@@ -260,15 +309,18 @@ void TactilityInput::PollPointer()
 
 void TactilityInput::PollKeyboard()
 {
-    if (m_Keyboard == nullptr)
+    for (int k = 0; k < m_KeyboardCount; ++k)
     {
-        return;
+        PollKeyboard(m_Keyboards[k]);
     }
+}
 
+void TactilityInput::PollKeyboard(struct Device* keyboard)
+{
     for (int reads = 0; reads < kMaxKeyReadsPerUpdate; ++reads)
     {
         struct KeyboardKeyData data = {};
-        if (keyboard_read_key(m_Keyboard, &data) != ERROR_NONE)
+        if (keyboard_read_key(keyboard, &data) != ERROR_NONE)
         {
             break;
         }
@@ -331,6 +383,9 @@ void TactilityInput::PollPointer()
 {
 }
 void TactilityInput::PollKeyboard()
+{
+}
+void TactilityInput::PollKeyboard(struct Device*)
 {
 }
 
