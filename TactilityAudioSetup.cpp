@@ -18,7 +18,7 @@ void TactilityAudioSetup::Setup(SetupCallback onComplete)
 #if defined(DEKI_PACKAGE_AUDIO)
     // deki-audio's loader and stream reading; safe to repeat.
     DekiAudioInitSystem();
-    StartAudio(sampleRate, initialVolume);
+    StartAudio(sampleRate);
 #else
     DEKI_LOG_WARNING("TactilityAudioSetup: the project has no deki-audio package, so there is nothing to play");
 #endif

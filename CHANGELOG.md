@@ -7,9 +7,11 @@
   a thread of the game's own mixes and writes to Tactility's audio stream,
   as the SDK asks (never the main or LVGL thread), so many audios play at
   once, with streaming and per-target conversion. It plays at 22050 Hz.
-- **The game follows Tactility's volume.** `initialVolume` is 100 (was 80):
-  the game adds no level of its own, so it plays as loud as the system
-  volume is set.
+- **The game's volume is Tactility's.** It starts at Tactility's level, and
+  `DekiAudio::SetMasterVolume` (a volume slider in the game) moves Tactility's
+  own volume, which Tactility keeps after the game closes. 0 mutes, since
+  Tactility's 0% is quiet but not silent; turning it up unmutes.
+  `initialVolume` is gone.
 - **Tactility pinned to 6e4b989f76cf** (main on 2026-11-15, still
   0.8.0-dev). Firmware for a device must be from this commit or later: the
   development server and app install changed.
@@ -26,6 +28,11 @@
   `cryptography` package if installed, else the `openssl` command) and shares
   `~/.tactility` with Tactility's `tt`. The first install asks on the device's
   screen. The simulator installs through tt.py too.
+
+### Fixed
+- **Touch works with this Tactility.** Its touch screens are touch devices
+  now (pointer is deprecated); the game looked only for a pointer and got
+  none. Every keyboard is read too, so the T-Deck's trackball arrows work.
 
 ## 0.40.0
 

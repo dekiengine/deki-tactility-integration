@@ -4,7 +4,9 @@
 // own firmware does (deki-audio's MAX98357A driver), it opens an output on
 // the board's audio stream device and writes PCM to it. The stream resamples
 // to the codec's native rate and applies the system volume, so the game can
-// keep its own rate and the mixer's volume stays a software scale on top.
+// keep its own rate. The system volume is also the game's volume: the mixer
+// plays at full and DekiAudio::SetMasterVolume moves Tactility's own level,
+// which Tactility saves and shows in its settings.
 //
 // The stream has one output slot for the whole device, so it must be closed
 // when the game ends, or nothing else can play until a reboot. main() does
@@ -129,6 +131,41 @@ public:
     bool IsRunning() const override { return m_Pump.IsRunning(); }
     bool IsHardwareConnected() const override { return m_Stream != nullptr; }
 
+    bool HasDeviceVolume() const override { return m_Device != nullptr; }
+
+    float GetDeviceVolume() const override
+    {
+        float percent = 100.0f;
+        if (m_Device == nullptr || audio_stream_get_volume(m_Device, AUDIO_CODEC_DIR_OUTPUT, &percent) != ERROR_NONE)
+        {
+            return 1.0f;
+        }
+        bool muted = false;
+        if (audio_stream_get_mute(m_Device, AUDIO_CODEC_DIR_OUTPUT, &muted) == ERROR_NONE && muted)
+        {
+            return 0.0f;
+        }
+        return percent * 0.01f;
+    }
+
+    void SetDeviceVolume(float volume) override
+    {
+        if (m_Device == nullptr)
+        {
+            return;
+        }
+        audio_stream_set_volume(m_Device, AUDIO_CODEC_DIR_OUTPUT, volume * 100.0f);
+        // Tactility's 0% is -50 dB, not silence, so 0 mutes, as on a phone.
+        // Turning it up unmutes again; otherwise a muted device would look
+        // like a slider that does nothing.
+        const bool mute = volume <= 0.0f;
+        bool muted = false;
+        if (audio_stream_get_mute(m_Device, AUDIO_CODEC_DIR_OUTPUT, &muted) == ERROR_NONE && muted != mute)
+        {
+            audio_stream_set_mute(m_Device, AUDIO_CODEC_DIR_OUTPUT, mute);
+        }
+    }
+
 private:
     bool Write(const int16_t* samples, size_t frames)
     {
@@ -170,7 +207,7 @@ TactilityAudio* s_Audio = nullptr;
 
 }  // namespace
 
-bool StartAudio(int sampleRate, int volumePercent)
+bool StartAudio(int sampleRate)
 {
     // The mixer first, so it outlives the output.
     DekiAudio::Mixer& mixer = DekiAudio::Mixer::Instance();
@@ -183,8 +220,8 @@ bool StartAudio(int sampleRate, int volumePercent)
     config.enabled = true;
     config.settings["sampleRate"] = std::to_string(sampleRate);
     s_Audio->Configure(config);
-    const int volume = volumePercent < 0 ? 0 : (volumePercent > 100 ? 100 : volumePercent);
-    mixer.SetMasterVolume(static_cast<float>(volume) * 0.01f);
+    // Tactility's volume is the game's, so the mixer plays at full.
+    mixer.SetMasterVolume(1.0f);
     if (!s_Audio->Initialize())
     {
         DEKI_LOG_WARNING("TactilityAudio: %s; playing silently", s_Audio->GetLastError());
@@ -212,7 +249,7 @@ void ShutdownAudio()
 namespace DekiTactility
 {
 
-bool StartAudio(int, int)
+bool StartAudio(int)
 {
     return false;
 }

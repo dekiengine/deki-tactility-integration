@@ -50,7 +50,6 @@
           "components": [
             {
               "properties": {
-                "initialVolume": 100,
                 "sampleRate": 22050
               },
               "type": "DekiTactility::TactilityAudioSetup"
