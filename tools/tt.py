@@ -362,7 +362,9 @@ def local_networks():
 
 # A device on Wi-Fi sleeps its radio between beacons, so it can take a few
 # hundred ms to answer (a T-Deck measured 130 ms and dropped the first ping).
-PROBE_TIMEOUT = 1.5
+# A device this computer has not talked to yet also needs an ARP lookup first,
+# which took more than 1.5 s with the whole /24 being probed at once.
+PROBE_TIMEOUT = 3
 
 
 def probe(ip):
@@ -385,7 +387,7 @@ def find_devices(quiet=False):
         print("Searching " + ", ".join(str(n) for n in nets) + " for Tactility devices...")
     hosts = [str(h) for n in nets for h in n.hosts()]
     found = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=128) as pool:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=256) as pool:
         for result in pool.map(probe, hosts):
             if result:
                 found.append(result)
