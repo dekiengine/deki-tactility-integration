@@ -33,6 +33,10 @@
 - **Touch works with this Tactility.** Its touch screens are touch devices
   now (pointer is deprecated); the game looked only for a pointer and got
   none. Every keyboard is read too, so the T-Deck's trackball arrows work.
+- **Deploy to the simulator works again.** The check that the simulator is
+  ready sent a hello without a client name, which this Tactility's
+  development server refuses, so every deploy stopped at "did not start
+  answering on port 6667".
 
 ## 0.40.0
 

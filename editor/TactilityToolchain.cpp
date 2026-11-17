@@ -860,7 +860,7 @@ std::string TactilitySdk::EnsureSimulator(int width, int height, const std::func
           << "context.check_hostname = False\n"
           << "context.verify_mode = ssl.CERT_NONE\n"
           << "with context.wrap_socket(socket.create_connection(('localhost', 6667), timeout=1)) as s:\n"
-          << "    s.sendall(b'{\"protocol\":1,\"mode\":\"info\"}\\n')\n"
+          << "    s.sendall(b'{\"protocol\":1,\"mode\":\"info\",\"client\":\"deki-editor\"}\\n')\n"
           << "    assert b'accepted' in s.recv(1024)\n";
     }
     const std::string probe = "python3 \"" + probeScript.string() + "\"";
